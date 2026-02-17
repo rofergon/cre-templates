@@ -18,7 +18,7 @@ contract Token is ERC20, Ownable {
         string memory symbol,
         address _identityRegistry,
         address _compliance
-    ) ERC20(name, symbol) Ownable(msg.sender) {
+    ) ERC20(name, symbol) {
         require(_identityRegistry != address(0), "Invalid Registry");
         require(_compliance != address(0), "Invalid Compliance");
         identityRegistry = IIdentityRegistry(_identityRegistry);
