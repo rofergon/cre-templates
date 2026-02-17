@@ -40,7 +40,7 @@ contract EmployeeVesting is Ownable {
         _;
     }
 
-    constructor(address _token) Ownable(msg.sender) {
+    constructor(address _token) {
         token = IERC20(_token);
     }
 
@@ -145,7 +145,7 @@ contract EmployeeVesting is Ownable {
         require(grant.isRevocable, "Not revocable");
         
         // recover unvested tokens
-        uint256 vested = calculateVestedAmount(_employee);
+        // uint256 vested = calculateVestedAmount(_employee);
         // If terminated, maybe strictly 0 or whatever was vested before termination. 
         // This is a simplified implementation.
         
