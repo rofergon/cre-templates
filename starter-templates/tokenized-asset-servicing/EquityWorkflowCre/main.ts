@@ -1,390 +1,395 @@
 import {
-	bytesToHex,
-	ConsensusAggregationByFields,
-	type CronPayload,
-	handler,
-	CronCapability,
-	EVMClient,
-	HTTPClient,
-	type EVMLog,
-	encodeCallMsg,
-	getNetwork,
-	type HTTPSendRequester,
-	hexToBase64,
-	LAST_FINALIZED_BLOCK_NUMBER,
-	median,
-	Runner,
-	type Runtime,
-	TxStatus,
-} from '@chainlink/cre-sdk'
-import { type Address, decodeFunctionResult, encodeFunctionData, zeroAddress } from 'viem'
-import { z } from 'zod'
-import { BalanceReader, IERC20, MessageEmitter, ReserveManager } from '../contracts/abi'
+  bytesToHex,
+  consensusIdenticalAggregation,
+  cre,
+  getNetwork,
+  type EVMLog,
+  type HTTPPayload,
+  type HTTPSendRequester,
+  hexToBase64,
+  ok,
+  Runner,
+  type Runtime,
+  TxStatus,
+} from "@chainlink/cre-sdk";
+import {
+  decodeEventLog,
+  encodeAbiParameters,
+  getAddress,
+  parseAbi,
+  parseAbiParameters,
+} from "viem";
+import { z } from "zod";
 
 const configSchema = z.object({
-	schedule: z.string(),
-	url: z.string(),
-	evms: z.array(
-		z.object({
-			tokenAddress: z.string(),
-			porAddress: z.string(),
-			proxyAddress: z.string(),
-			balanceReaderAddress: z.string(),
-			messageEmitterAddress: z.string(),
-			chainSelectorName: z.string(),
-			gasLimit: z.string(),
-		}),
-	),
-})
+  url: z.string(),
+  evms: z
+    .array(
+      z.object({
+        receiverAddress: z.string(),
+        identityRegistryAddress: z.string(),
+        employeeVestingAddress: z.string(),
+        chainSelectorName: z.string(),
+        gasLimit: z.string(),
+      }),
+    )
+    .min(1),
+});
 
-type Config = z.infer<typeof configSchema>
+type Config = z.infer<typeof configSchema>;
 
-interface PORResponse {
-	accountName: string
-	totalTrust: number
-	totalToken: number
-	ripcord: boolean
-	updatedAt: string
-}
+const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
+const bytes32Schema = z.string().regex(/^0x[a-fA-F0-9]{64}$/);
 
-interface ReserveInfo {
-	lastUpdated: Date
-	totalReserve: number
-}
+const syncKycSchema = z.object({
+  action: z.literal("SYNC_KYC"),
+  employeeAddress: addressSchema,
+  verified: z.boolean(),
+  identityAddress: addressSchema.optional(),
+  country: z.coerce.number().int().min(0).max(65535).optional(),
+});
 
-// Utility function to safely stringify objects with bigints
-const safeJsonStringify = (obj: any): string =>
-	JSON.stringify(obj, (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2)
+const syncEmploymentSchema = z.object({
+  action: z.literal("SYNC_EMPLOYMENT_STATUS"),
+  employeeAddress: addressSchema,
+  employed: z.boolean(),
+});
 
-const fetchReserveInfo = (sendRequester: HTTPSendRequester, config: Config): ReserveInfo => {
-	const response = sendRequester.sendRequest({ method: 'GET', url: config.url }).result()
+const syncGoalSchema = z.object({
+  action: z.literal("SYNC_GOAL"),
+  goalId: bytes32Schema,
+  achieved: z.boolean(),
+});
 
-	if (response.statusCode !== 200) {
-		throw new Error(`HTTP request failed with status: ${response.statusCode}`)
-	}
+const syncFreezeWalletSchema = z.object({
+  action: z.literal("SYNC_FREEZE_WALLET"),
+  walletAddress: addressSchema,
+  frozen: z.boolean(),
+});
 
-	const responseText = Buffer.from(response.body).toString('utf-8')
-	const porResp: PORResponse = JSON.parse(responseText)
+const syncInputSchema = z.discriminatedUnion("action", [
+  syncKycSchema,
+  syncEmploymentSchema,
+  syncGoalSchema,
+  syncFreezeWalletSchema,
+]);
 
-	if (porResp.ripcord) {
-		throw new Error('ripcord is true')
-	}
+type SyncInput = z.infer<typeof syncInputSchema>;
 
-	return {
-		lastUpdated: new Date(porResp.updatedAt),
-		totalReserve: porResp.totalToken,
-	}
-}
+type PostResponse = {
+  statusCode: number;
+};
 
-const fetchNativeTokenBalance = (
-	runtime: Runtime<Config>,
-	evmConfig: Config['evms'][0],
-	tokenHolderAddress: string,
-): bigint => {
-	const network = getNetwork({
-		chainFamily: 'evm',
-		chainSelectorName: evmConfig.chainSelectorName,
-		isTestnet: true,
-	})
+const ACTION_TYPE = {
+  SYNC_KYC: 0,
+  SYNC_EMPLOYMENT_STATUS: 1,
+  SYNC_GOAL: 2,
+  SYNC_FREEZE_WALLET: 3,
+} as const;
 
-	if (!network) {
-		throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`)
-	}
+const safeJsonStringify = (obj: unknown): string =>
+  JSON.stringify(
+    obj,
+    (_, value) => (typeof value === "bigint" ? value.toString() : value),
+    2,
+  );
 
-	const evmClient = new EVMClient(network.chainSelector.selector)
+const eventAbi = parseAbi([
+  "event IdentityRegistered(address indexed userAddress, address indexed identity, uint16 country)",
+  "event IdentityRemoved(address indexed userAddress, address indexed identity)",
+  "event CountryUpdated(address indexed userAddress, uint16 country)",
+  "event GrantCreated(address indexed employee, uint256 amount)",
+  "event TokensClaimed(address indexed employee, uint256 amount)",
+  "event EmploymentStatusUpdated(address indexed employee, bool status)",
+  "event GoalUpdated(bytes32 indexed goalId, bool achieved)",
+  "event GrantRevoked(address indexed employee, uint256 amountForfeited)",
+]);
 
-	// Encode the contract call data for getNativeBalances
-	const callData = encodeFunctionData({
-		abi: BalanceReader,
-		functionName: 'getNativeBalances',
-		args: [[tokenHolderAddress as Address]],
-	})
+const postData = (
+  sendRequester: HTTPSendRequester,
+  config: Config,
+  lambdaPayload: Record<string, string | number | boolean>,
+): PostResponse => {
+  const bodyBytes = new TextEncoder().encode(JSON.stringify(lambdaPayload));
+  const body = Buffer.from(bodyBytes).toString("base64");
 
-	const contractCall = evmClient
-		.callContract(runtime, {
-			call: encodeCallMsg({
-				from: zeroAddress,
-				to: evmConfig.balanceReaderAddress as Address,
-				data: callData,
-			}),
-			blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-		})
-		.result()
+  const req = {
+    url: config.url,
+    method: "POST" as const,
+    body,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    cacheSettings: {
+      store: true,
+      maxAge: "30s",
+    },
+  };
 
-	// Decode the result
-	const balances = decodeFunctionResult({
-		abi: BalanceReader,
-		functionName: 'getNativeBalances',
-		data: bytesToHex(contractCall.data),
-	})
+  const resp = sendRequester.sendRequest(req).result();
+  if (!ok(resp)) {
+    throw new Error(`HTTP request to Lambda failed with status ${resp.statusCode}`);
+  }
 
-	if (!balances || balances.length === 0) {
-		throw new Error('No balances returned from contract')
-	}
+  return { statusCode: resp.statusCode };
+};
 
-	return balances[0]
-}
+const buildInstruction = (input: SyncInput): { actionType: number; payload: `0x${string}` } => {
+  switch (input.action) {
+    case "SYNC_KYC": {
+      if (input.verified && !input.identityAddress) {
+        throw new Error("SYNC_KYC requires identityAddress when verified=true");
+      }
 
-const getTotalSupply = (runtime: Runtime<Config>): bigint => {
-	const evms = runtime.config.evms
-	let totalSupply = 0n
+      const employee = getAddress(input.employeeAddress);
+      const identity = getAddress(input.identityAddress ?? input.employeeAddress);
+      const country = input.country ?? 0;
 
-	for (const evmConfig of evms) {
-		const network = getNetwork({
-			chainFamily: 'evm',
-			chainSelectorName: evmConfig.chainSelectorName,
-			isTestnet: true,
-		})
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address employee, bool verified, address identity, uint16 country"),
+        [employee, input.verified, identity, country],
+      );
 
-		if (!network) {
-			throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`)
-		}
+      return { actionType: ACTION_TYPE.SYNC_KYC, payload };
+    }
+    case "SYNC_EMPLOYMENT_STATUS": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address employee, bool employed"),
+        [getAddress(input.employeeAddress), input.employed],
+      );
 
-		const evmClient = new EVMClient(network.chainSelector.selector)
+      return {
+        actionType: ACTION_TYPE.SYNC_EMPLOYMENT_STATUS,
+        payload,
+      };
+    }
+    case "SYNC_GOAL": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("bytes32 goalId, bool achieved"),
+        [input.goalId as `0x${string}`, input.achieved],
+      );
 
-		// Encode the contract call data for totalSupply
-		const callData = encodeFunctionData({
-			abi: IERC20,
-			functionName: 'totalSupply',
-		})
+      return { actionType: ACTION_TYPE.SYNC_GOAL, payload };
+    }
+    case "SYNC_FREEZE_WALLET": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address wallet, bool frozen"),
+        [getAddress(input.walletAddress), input.frozen],
+      );
 
-		const contractCall = evmClient
-			.callContract(runtime, {
-				call: encodeCallMsg({
-					from: zeroAddress,
-					to: evmConfig.tokenAddress as Address,
-					data: callData,
-				}),
-				blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-			})
-			.result()
+      return {
+        actionType: ACTION_TYPE.SYNC_FREEZE_WALLET,
+        payload,
+      };
+    }
+    default:
+      throw new Error("Unsupported sync action");
+  }
+};
 
-		// Decode the result
-		const supply = decodeFunctionResult({
-			abi: IERC20,
-			functionName: 'totalSupply',
-			data: bytesToHex(contractCall.data),
-		})
-
-		totalSupply += supply
-	}
-
-	return totalSupply
-}
-
-const updateReserves = (
-	runtime: Runtime<Config>,
-	totalSupply: bigint,
-	totalReserveScaled: bigint,
+const submitInstruction = (
+  runtime: Runtime<Config>,
+  evmClient: InstanceType<typeof cre.capabilities.EVMClient>,
+  instruction: { actionType: number; payload: `0x${string}` },
 ): string => {
-	const evmConfig = runtime.config.evms[0]
-	const network = getNetwork({
-		chainFamily: 'evm',
-		chainSelectorName: evmConfig.chainSelectorName,
-		isTestnet: true,
-	})
+  const evmConfig = runtime.config.evms[0];
 
-	if (!network) {
-		throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`)
-	}
+  const reportData = encodeAbiParameters(
+    parseAbiParameters("uint8 actionType, bytes payload"),
+    [instruction.actionType, instruction.payload],
+  );
 
-	const evmClient = new EVMClient(network.chainSelector.selector)
+  runtime.log(`Submitting instruction actionType=${instruction.actionType}`);
 
-	runtime.log(
-		`Updating reserves totalSupply ${totalSupply.toString()} totalReserveScaled ${totalReserveScaled.toString()}`,
-	)
+  const reportResponse = runtime
+    .report({
+      encodedPayload: hexToBase64(reportData),
+      encoderName: "evm",
+      signingAlgo: "ecdsa",
+      hashingAlgo: "keccak256",
+    })
+    .result();
 
-	// Encode the contract call data for updateReserves
-	const callData = encodeFunctionData({
-		abi: ReserveManager,
-		functionName: 'updateReserves',
-		args: [
-			{
-				totalMinted: totalSupply,
-				totalReserve: totalReserveScaled,
-			},
-		],
-	})
+  const resp = evmClient
+    .writeReport(runtime, {
+      receiver: evmConfig.receiverAddress,
+      report: reportResponse,
+      gasConfig: {
+        gasLimit: evmConfig.gasLimit,
+      },
+    })
+    .result();
 
-	// Step 1: Generate report using consensus capability
-	const reportResponse = runtime
-		.report({
-			encodedPayload: hexToBase64(callData),
-			encoderName: 'evm',
-			signingAlgo: 'ecdsa',
-			hashingAlgo: 'keccak256',
-		})
-		.result()
+  if (resp.txStatus !== TxStatus.SUCCESS) {
+    throw new Error(`writeReport failed: ${resp.errorMessage || resp.txStatus}`);
+  }
 
-	const resp = evmClient
-		.writeReport(runtime, {
-			receiver: evmConfig.proxyAddress,
-			report: reportResponse,
-			gasConfig: {
-				gasLimit: evmConfig.gasLimit,
-			},
-		})
-		.result()
+  const txHashHex = bytesToHex(resp.txHash || new Uint8Array(32));
+  runtime.log(`writeReport succeeded: ${txHashHex}`);
+  return txHashHex;
+};
 
-	const txStatus = resp.txStatus
+const buildLambdaPayloadFromLog = (
+  runtime: Runtime<Config>,
+  log: EVMLog,
+): Record<string, string | number | boolean> | null => {
+  const topics = log.topics.map((topic) => bytesToHex(topic)) as [
+    `0x${string}`,
+    ...`0x${string}`[],
+  ];
+  const data = bytesToHex(log.data);
 
-	if (txStatus !== TxStatus.SUCCESS) {
-		throw new Error(`Failed to write report: ${resp.errorMessage || txStatus}`)
-	}
+  let decoded: any;
+  try {
+    decoded = decodeEventLog({
+      abi: eventAbi,
+      topics,
+      data,
+    });
+  } catch {
+    runtime.log("Ignoring log because it does not match supported events");
+    return null;
+  }
 
-	const txHash = resp.txHash || new Uint8Array(32)
+  runtime.log(`Detected event: ${decoded.eventName}`);
+  const args = decoded.args as Record<string, unknown>;
 
-	runtime.log(`Write report transaction succeeded at txHash: ${bytesToHex(txHash)}`)
+  switch (decoded.eventName) {
+    case "IdentityRegistered":
+      return {
+        action: "IdentityRegistered",
+        employeeAddress: String(args.userAddress),
+        identityAddress: String(args.identity),
+        country: Number(args.country),
+      };
+    case "IdentityRemoved":
+      return {
+        action: "IdentityRemoved",
+        employeeAddress: String(args.userAddress),
+        identityAddress: String(args.identity),
+      };
+    case "CountryUpdated":
+      return {
+        action: "CountryUpdated",
+        employeeAddress: String(args.userAddress),
+        country: Number(args.country),
+      };
+    case "GrantCreated":
+      return {
+        action: "GrantCreated",
+        employeeAddress: String(args.employee),
+        amount: String(args.amount),
+      };
+    case "TokensClaimed":
+      return {
+        action: "TokensClaimed",
+        employeeAddress: String(args.employee),
+        amount: String(args.amount),
+      };
+    case "EmploymentStatusUpdated":
+      return {
+        action: "EmploymentStatusUpdated",
+        employeeAddress: String(args.employee),
+        employed: Boolean(args.status),
+      };
+    case "GoalUpdated":
+      return {
+        action: "GoalUpdated",
+        goalId: String(args.goalId),
+        achieved: Boolean(args.achieved),
+      };
+    case "GrantRevoked":
+      return {
+        action: "GrantRevoked",
+        employeeAddress: String(args.employee),
+        amountForfeited: String(args.amountForfeited),
+      };
+    default:
+      return null;
+  }
+};
 
-	return txHash.toString()
-}
-
-const doPOR = (runtime: Runtime<Config>): string => {
-	runtime.log(`fetching por url ${runtime.config.url}`)
-
-	const httpCapability = new HTTPClient()
-	const reserveInfo = httpCapability
-		.sendRequest(
-			runtime,
-			fetchReserveInfo,
-			ConsensusAggregationByFields<ReserveInfo>({
-				lastUpdated: median,
-				totalReserve: median,
-			}),
-		)(runtime.config)
-		.result()
-
-	runtime.log(`ReserveInfo ${safeJsonStringify(reserveInfo)}`)
-
-	const totalSupply = getTotalSupply(runtime)
-	runtime.log(`TotalSupply ${totalSupply.toString()}`)
-
-	const totalReserveScaled = BigInt(reserveInfo.totalReserve * 1e18)
-	runtime.log(`TotalReserveScaled ${totalReserveScaled.toString()}`)
-
-	const nativeTokenBalance = fetchNativeTokenBalance(
-		runtime,
-		runtime.config.evms[0],
-		runtime.config.evms[0].tokenAddress,
-	)
-	runtime.log(`NativeTokenBalance ${nativeTokenBalance.toString()}`)
-
-	updateReserves(runtime, totalSupply, totalReserveScaled)
-
-	return reserveInfo.totalReserve.toString()
-}
-
-const getLastMessage = (
-	runtime: Runtime<Config>,
-	evmConfig: Config['evms'][0],
-	emitter: string,
+const onHTTPTrigger = (
+  runtime: Runtime<Config>,
+  evmClient: InstanceType<typeof cre.capabilities.EVMClient>,
+  payload: HTTPPayload,
 ): string => {
-	const network = getNetwork({
-		chainFamily: 'evm',
-		chainSelectorName: evmConfig.chainSelectorName,
-		isTestnet: true,
-	})
+  if (!payload.input || payload.input.length === 0) {
+    throw new Error("HTTP trigger payload is empty");
+  }
 
-	if (!network) {
-		throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`)
-	}
+  const rawPayload = Buffer.from(payload.input).toString("utf-8");
+  runtime.log(`HTTP payload received: ${rawPayload}`);
 
-	const evmClient = new EVMClient(network.chainSelector.selector)
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(rawPayload);
+  } catch {
+    throw new Error("HTTP payload is not valid JSON");
+  }
 
-	// Encode the contract call data for getLastMessage
-	const callData = encodeFunctionData({
-		abi: MessageEmitter,
-		functionName: 'getLastMessage',
-		args: [emitter as Address],
-	})
+  const syncInput = syncInputSchema.parse(parsedPayload);
+  runtime.log(`Parsed sync action: ${safeJsonStringify(syncInput)}`);
 
-	const contractCall = evmClient
-		.callContract(runtime, {
-			call: encodeCallMsg({
-				from: zeroAddress,
-				to: evmConfig.messageEmitterAddress as Address,
-				data: callData,
-			}),
-			blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-		})
-		.result()
+  const instruction = buildInstruction(syncInput);
+  return submitInstruction(runtime, evmClient, instruction);
+};
 
-	// Decode the result
-	const message = decodeFunctionResult({
-		abi: MessageEmitter,
-		functionName: 'getLastMessage',
-		data: bytesToHex(contractCall.data),
-	})
+const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
+  const lambdaPayload = buildLambdaPayloadFromLog(runtime, log);
+  if (!lambdaPayload) {
+    return "Ignored event";
+  }
 
-	return message
-}
+  const httpClient = new cre.capabilities.HTTPClient();
+  const resp = httpClient
+    .sendRequest(runtime, postData, consensusIdenticalAggregation<PostResponse>())(
+      runtime.config,
+      lambdaPayload,
+    )
+    .result();
 
-const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
-	if (!payload.scheduledExecutionTime) {
-		throw new Error('Scheduled execution time is required')
-	}
-
-	runtime.log('Running CronTrigger')
-
-	return doPOR(runtime)
-}
-
-const onLogTrigger = (runtime: Runtime<Config>, payload: EVMLog): string => {
-	runtime.log('Running LogTrigger')
-
-	const topics = payload.topics
-
-	if (topics.length < 3) {
-		runtime.log('Log payload does not contain enough topics')
-		throw new Error(`log payload does not contain enough topics ${topics.length}`)
-	}
-
-	// topics[1] is a 32-byte topic, but the address is the last 20 bytes
-	const emitter = bytesToHex(topics[1].slice(12))
-	runtime.log(`Emitter ${emitter}`)
-
-	const message = getLastMessage(runtime, runtime.config.evms[0], emitter)
-
-	runtime.log(`Message retrieved from the contract ${message}`)
-
-	return message
-}
+  runtime.log(`Onchain event synced to Lambda. Status ${resp.statusCode}`);
+  return lambdaPayload.action as string;
+};
 
 const initWorkflow = (config: Config) => {
-	const cronTrigger = new CronCapability()
-	const network = getNetwork({
-		chainFamily: 'evm',
-		chainSelectorName: config.evms[0].chainSelectorName,
-		isTestnet: true,
-	})
+  const evmConfig = config.evms[0];
+  const network = getNetwork({
+    chainFamily: "evm",
+    chainSelectorName: evmConfig.chainSelectorName,
+    isTestnet: true,
+  });
 
-	if (!network) {
-		throw new Error(
-			`Network not found for chain selector name: ${config.evms[0].chainSelectorName}`,
-		)
-	}
+  if (!network) {
+    throw new Error(`Network not found for chain selector name: ${evmConfig.chainSelectorName}`);
+  }
 
-	const evmClient = new EVMClient(network.chainSelector.selector)
+  const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector);
+  const httpTrigger = new cre.capabilities.HTTPCapability();
+  const onHTTPTriggerWithClient = (runtime: Runtime<Config>, payload: HTTPPayload): string =>
+    onHTTPTrigger(runtime, evmClient, payload);
 
-	return [
-		handler(
-			cronTrigger.trigger({
-				schedule: config.schedule,
-			}),
-			onCronTrigger,
-		),
-		handler(
-			evmClient.logTrigger({
-				addresses: [config.evms[0].messageEmitterAddress],
-			}),
-			onLogTrigger,
-		),
-	]
-}
+  return [
+    cre.handler(httpTrigger.trigger({}), onHTTPTriggerWithClient),
+    cre.handler(
+      evmClient.logTrigger({
+        addresses: [hexToBase64(evmConfig.identityRegistryAddress)],
+      }),
+      onLogTrigger,
+    ),
+    cre.handler(
+      evmClient.logTrigger({
+        addresses: [hexToBase64(evmConfig.employeeVestingAddress)],
+      }),
+      onLogTrigger,
+    ),
+  ];
+};
 
 export async function main() {
-	const runner = await Runner.newRunner<Config>({
-		configSchema,
-	})
-	await runner.run(initWorkflow)
+  const runner = await Runner.newRunner<Config>({
+    configSchema,
+  });
+  await runner.run(initWorkflow);
 }
