@@ -15,6 +15,15 @@
 #     secrets-path: "../secrets.yaml"       # Path to secrets file (project root by default)
 
 # ==========================================================================
+local-simulation:
+  user-workflow:
+    workflow-name: "EquityWorkflowCre-local"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.staging.json"
+    secrets-path: ""
+
+# ==========================================================================
 staging-settings:
   user-workflow:
     workflow-name: "EquityWorkflowCre-staging"
