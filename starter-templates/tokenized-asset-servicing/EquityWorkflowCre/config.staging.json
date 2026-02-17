@@ -5,7 +5,7 @@
       "receiverAddress": "0x0000000000000000000000000000000000000000",
       "identityRegistryAddress": "0x0000000000000000000000000000000000000000",
       "employeeVestingAddress": "0x0000000000000000000000000000000000000000",
-      "chainSelectorName": "ethereum-testnet-sepolia",
+      "chainSelectorName": "ethereum-testnet-sepolia-base-1",
       "gasLimit": "1000000"
     }
   ]
