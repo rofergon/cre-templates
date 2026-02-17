@@ -8,6 +8,8 @@ node_modules/
 package-lock.json~
 yarn.lock
 pnpm-lock.yaml
+bun.lock
+bun.lockb
 
 # Environment
 .env
@@ -45,3 +47,9 @@ yarn-error.log*
 # Testing
 *.test.js.snap
 *.test.ts.snap
+
+# Secrets
+secrets.yaml
+
+# ABIs
+contracts/abi/

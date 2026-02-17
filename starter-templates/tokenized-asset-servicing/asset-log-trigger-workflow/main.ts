@@ -1,6 +1,6 @@
-import { 
-  cre, 
-  Runner, 
+import {
+  cre,
+  Runner,
   type Runtime,
   getNetwork,
   type HTTPPayload,
@@ -9,20 +9,20 @@ import {
   consensusIdenticalAggregation,
   EVMLog,
   hexToBase64
- } from "@chainlink/cre-sdk";
+} from "@chainlink/cre-sdk";
 import { bytesToHex, decodeEventLog, encodeAbiParameters, parseAbi, parseAbiParameters } from "viem";
 import { z } from 'zod';
 
 const configSchema = z.object({
-  	schedule: z.string(),
-    url: z.string(),
-	  evms: z.array(
-		z.object({
-			assetAddress: z.string(),
-			chainSelectorName: z.string(),
-			gasLimit: z.string(),
-		}),
-	),
+  schedule: z.string(),
+  url: z.string(),
+  evms: z.array(
+    z.object({
+      assetAddress: z.string(),
+      chainSelectorName: z.string(),
+      gasLimit: z.string(),
+    }),
+  ),
 })
 
 type Config = z.infer<typeof configSchema>
@@ -82,8 +82,8 @@ const postData = (sendRequester: HTTPSendRequester, config: Config, assetParams:
       "Content-Type": "application/json",
     },
     cacheSettings: {
-      readFromCache: true, // Enable reading from cache
-      maxAgeMs: 60000, // Accept cached responses up to 60 seconds old
+      store: true, // Enable caching the response
+      maxAge: "60s", // Accept cached responses up to 60 seconds old
     },
   }
 
@@ -104,7 +104,7 @@ const eventAbi = parseAbi([
 ])
 
 const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
-  
+
   const topics = log.topics.map((topic) => bytesToHex(topic)) as [`0x${string}`, ...`0x${string}`[]]
   const data = bytesToHex(log.data)
 
@@ -117,11 +117,11 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
 
   runtime.log(`Event name: ${decodedLog.eventName}`)
   let assetParams: AssetParams
-  
+
   const httpClient = new cre.capabilities.HTTPClient()
 
   // extract info from event and prepare the parameters for function postData
-  switch(decodedLog.eventName) {
+  switch (decodedLog.eventName) {
     case "AssetRegistered":
       const { assetId: assetIdReg, issuer, initialSupply, name } = decodedLog.args
       assetParams = {
@@ -130,7 +130,7 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
         issuer,
         initialSupply: initialSupply.toString(),
         assetName: name,
-      };    
+      };
       runtime.log(`Event AssetRegistered detected: assetId ${assetIdReg} | issuer ${issuer} initialSupply ${initialSupply} | name ${name}`)
       break;
     case "AssetVerified":
@@ -152,7 +152,7 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
       runtime.log(`Event TokensMinted detected: assetId ${assetIdMint} | amount ${amountMint}`)
       break
     case "TokensRedeemed":
-      const {assetId: assetIdRedeem, amount: amountRedeem } = decodedLog.args
+      const { assetId: assetIdRedeem, amount: amountRedeem } = decodedLog.args
       assetParams = {
         action: "TokensRedeemed",
         assetId: assetIdRedeem.toString(),
@@ -178,27 +178,27 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
 };
 
 const onHTTPTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string => {
-	runtime.log('Raw HTTP trigger received')
+  runtime.log('Raw HTTP trigger received')
 
-	// Expect a HTTP request with metdata info, and it cannot be empty
-	if (!payload.input || payload.input.length === 0) {
-		runtime.log('HTTP trigger payload is empty')
+  // Expect a HTTP request with metdata info, and it cannot be empty
+  if (!payload.input || payload.input.length === 0) {
+    runtime.log('HTTP trigger payload is empty')
     throw new Error("Json payload is empty")
-	}
+  }
 
-	// Log the raw JSON for debugging (human-readable).
-	runtime.log(`Payload bytes payloadBytes ${payload.input.toString()}`)
+  // Log the raw JSON for debugging (human-readable).
+  runtime.log(`Payload bytes payloadBytes ${payload.input.toString()}`)
 
-	try {
+  try {
     // fetch the assetId and newUri from http request
-		runtime.log(`Parsed HTTP trigger received payload ${payload.input.toString()}`)
+    runtime.log(`Parsed HTTP trigger received payload ${payload.input.toString()}`)
     const responseText = Buffer.from(payload.input).toString('utf-8')
-    const {assetId, uid} = JSON.parse(responseText)
+    const { assetId, uid } = JSON.parse(responseText)
 
     runtime.log(`Asset ID is ${assetId}`)
     runtime.log(`Asset UID is ${uid}`)
 
-    if(!assetId || !uid) {
+    if (!assetId || !uid) {
       throw new Error("Failed to extract assetId or newUri from Http request, please check the json payload file")
     }
 
@@ -212,35 +212,35 @@ const onHTTPTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string =
       isTestnet: true
     })
 
-    if(!network) {
+    if (!network) {
       throw new Error("Failed to get network config")
     }
     const evmClient = new cre.capabilities.EVMClient(network?.chainSelector.selector)
 
     const reportData = encodeAbiParameters(
-    parseAbiParameters("uint256 assetId, string memory newUri"),
-    [BigInt(assetId), uid as string]
-  )
+      parseAbiParameters("uint256 assetId, string memory newUri"),
+      [BigInt(assetId), uid as string]
+    )
 
     // generate signed report
     const reportResponse = runtime.report({
       encodedPayload: hexToBase64(reportData),
-			encoderName: 'evm',
+      encoderName: 'evm',
       signingAlgo: 'ecdsa',
       hashingAlgo: 'keccak256',
     })
-    .result()
+      .result()
 
     // submit report to the tokenized asset platform contract 
     const writeReportResult = evmClient
-		.writeReport(runtime, {
-			receiver: evmConfig.assetAddress,
-			report: reportResponse,
-			gasConfig: {
-				gasLimit: evmConfig.gasLimit,
-			},
-		})
-		.result()
+      .writeReport(runtime, {
+        receiver: evmConfig.assetAddress,
+        report: reportResponse,
+        gasConfig: {
+          gasLimit: evmConfig.gasLimit,
+        },
+      })
+      .result()
 
     const txHash = bytesToHex(writeReportResult.txHash || new Uint8Array(32))
 
@@ -248,24 +248,24 @@ const onHTTPTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string =
 
     return txHash
 
-	} catch (error) {
-		runtime.log('Failed to parse HTTP trigger payload')
-		throw new Error('Failed to parse HTTP trigger payload')
-	}
+  } catch (error) {
+    runtime.log('Failed to parse HTTP trigger payload')
+    throw new Error('Failed to parse HTTP trigger payload')
+  }
 }
 
 const initWorkflow = (config: Config) => {
   const network = getNetwork({
-		chainFamily: 'evm',
-		chainSelectorName: config.evms[0].chainSelectorName,
-		isTestnet: true,
-	})
+    chainFamily: 'evm',
+    chainSelectorName: config.evms[0].chainSelectorName,
+    isTestnet: true,
+  })
 
   if (!network) {
-		throw new Error(
-			`Network not found for chain selector name: ${config.evms[0].chainSelectorName}`,
-		)
-	}
+    throw new Error(
+      `Network not found for chain selector name: ${config.evms[0].chainSelectorName}`,
+    )
+  }
 
   const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector)
   const httpTrigger = new cre.capabilities.HTTPCapability()

@@ -1,10 +1,10 @@
 {
-  "name": "typescript-simple-template",
+  "name": "typescript-por-template",
   "version": "1.0.0",
   "main": "dist/main.js",
   "private": true,
   "scripts": {
-    "postinstall": "bunx cre-setup"
+    "postinstall": "bun x cre-setup"
   },
   "license": "UNLICENSED",
   "dependencies": {
