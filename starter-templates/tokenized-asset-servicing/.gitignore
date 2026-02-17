@@ -1,16 +1,47 @@
-# Environment files
-*.env
-
-# Configuration files with sensitive data
-config.json
-
-# Dependencies
-node_modules/
-
-# Build artifacts
-tmp.js
-tmp.wasm
-
 # System files
 .DS_Store
 *.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+package-lock.json~
+yarn.lock
+pnpm-lock.yaml
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Configuration
+config.json
+
+# Hardhat
+artifacts/
+cache/
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+contracts/coverage/
+contracts/coverage.json
+contracts/gas-reporter-report.json
+
+# Build results
+dist/
+out/
+tmp.js
+tmp.wasm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs
+.idea/
+.vscode/
+
+# Testing
+*.test.js.snap
+*.test.ts.snap
