@@ -1,80 +1,91 @@
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import * as crypto from "crypto";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import https from "https";
 import { URL } from "url";
 
-/**
- * Constants for HTTP status codes used throughout the handler.
- */
 const STATUS_OK = 200;
 const STATUS_BAD_REQUEST = 400;
 const STATUS_NOT_FOUND = 404;
 const STATUS_SERVER_ERROR = 500;
 
-/**
- * Name of the DynamoDB table to store asset states.
- */
-const TABLE_NAME = "AssetState"; // Update the value if you use a table with different name
+const TABLE_NAME = process.env.TABLE_NAME || "EquityEmployeeState";
+const PARTITION_KEY = process.env.PARTITION_KEY || "RecordId";
+const yourAwsRegion = ""; // Optional fallback (for console testing)
+const AWS_REGION = process.env.AWS_REGION || yourAwsRegion;
 
-/**
- * Required fields for each action to validate incoming parameters.
- */
 const REQUIRED_FIELDS = {
-  read: ["assetId"],
-  AssetRegistered: ["assetId", "issuer", "initialSupply", "assetName"],
-  AssetVerified: ["assetId", "isValid"],
-  TokensMinted: ["assetId", "amount"],
-  TokensRedeemed: ["assetId", "amount"],
-  sendNotification: ["assetId", "apiUrl"],
+  readEmployee: ["employeeAddress"],
+  CompanyEmployeeInput: ["employeeAddress"],
+  ManualSyncToCre: ["apiUrl", "payload"],
+  IdentityRegistered: ["employeeAddress", "identityAddress", "country"],
+  IdentityRemoved: ["employeeAddress"],
+  CountryUpdated: ["employeeAddress", "country"],
+  EmploymentStatusUpdated: ["employeeAddress", "employed"],
+  GrantCreated: ["employeeAddress", "amount"],
+  TokensClaimed: ["employeeAddress", "amount"],
+  GrantRevoked: ["employeeAddress", "amountForfeited"],
+  GoalUpdated: ["goalId", "achieved"],
 };
 
-/**
- * Helper function to build a standardized Lambda response object.
- * @param {number} statusCode - The HTTP status code.
- * @param {object} body - The response body object.
- * @returns {object} Lambda response with statusCode and JSON-stringified body.
- */
+const COMPANY_ALLOWED_FIELDS = [
+  "employeeId",
+  "identityAddress",
+  "country",
+  "kycVerified",
+  "employed",
+  "goalId",
+  "goalAchieved",
+  "walletFrozen",
+  "vestingTotalAmount",
+  "vestingStartTime",
+  "cliffDuration",
+  "vestingDuration",
+  "isRevocable",
+  "notes",
+];
+
 const buildResponse = (statusCode, body) => ({
   statusCode,
+  headers: {
+    "Content-Type": "application/json",
+  },
   body: JSON.stringify(body),
 });
 
-/**
- * Validates that all required fields for the given action are present in params.
- * @param {string} action - The action being performed.
- * @param {object} params - The parsed request parameters.
- * @throws {Error} If validation fails.
- */
-const validateParams = (action, params) => {
-  const required = REQUIRED_FIELDS[action];
-  if (!required || !required.every((field) => params[field] != null)) {
-    throw new Error("Missing required parameters");
+const buildKey = (recordId) => ({
+  [PARTITION_KEY]: recordId,
+});
+
+const normalizeAddress = (value) => String(value || "").toLowerCase();
+const employeeRecordId = (employeeAddress) => `employee:${normalizeAddress(employeeAddress)}`;
+const goalRecordId = (goalId) => `goal:${String(goalId || "").toLowerCase()}`;
+
+const parseBigInt = (value) => {
+  try {
+    return BigInt(value ?? "0");
+  } catch {
+    throw new Error(`Invalid bigint value: ${value}`);
   }
 };
 
-/**
- * Retrieves an item from DynamoDB by assetId.
- * @param {object} client - The DynamoDB document client.
- * @param {string|number} assetId - The ID of the asset.
- * @returns {object} The item from DynamoDB, or empty object if not found.
- */
-const getItem = async (client, assetId) => {
-  const command = new GetCommand({
-    TableName: TABLE_NAME,
-    Key: { AssetId: assetId },
-  });
-  const { Item } = await client.send(command);
-  return Item || {};
+const validateParams = (action, params) => {
+  const required = REQUIRED_FIELDS[action];
+  if (!required || !required.every((field) => params[field] != null)) {
+    throw new Error(`Missing required parameters for action ${action}`);
+  }
 };
 
-/**
- * Puts an item into DynamoDB.
- * @param {object} client - The DynamoDB document client.
- * @param {object} item - The item to store.
- */
-const putItem = async (client, item) => {
+const getRecord = async (client, recordId) => {
+  const command = new GetCommand({
+    TableName: TABLE_NAME,
+    Key: buildKey(recordId),
+  });
+
+  const { Item } = await client.send(command);
+  return Item || null;
+};
+
+const putRecord = async (client, item) => {
   const command = new PutCommand({
     TableName: TABLE_NAME,
     Item: item,
@@ -82,171 +93,357 @@ const putItem = async (client, item) => {
   await client.send(command);
 };
 
+const upsertRecord = async (client, recordId, patch) => {
+  const current = (await getRecord(client, recordId)) || {};
+  const updated = {
+    ...current,
+    ...patch,
+    [PARTITION_KEY]: recordId,
+    updatedAt: new Date().toISOString(),
+  };
+  await putRecord(client, updated);
+  return updated;
+};
 
-/**
- * Handlers for each supported action. Each returns a promise resolving to the response data.
- */
-const handlers = {
-  /**
-   * Reads the asset state from DynamoDB.
-   */
-  read: async (client, { assetId }) => ({ data: await getItem(client, assetId) }),
+const postJson = async (apiUrl, payload) => {
+  const body = JSON.stringify(payload);
+  const parsedUrl = new URL(apiUrl);
 
-  /**
-   * Registers a new asset in DynamoDB.
-   */
-  AssetRegistered: async (client, { assetId, issuer, initialSupply, assetName }) => {
-    const item = {
-      AssetId: assetId,
-      AssetName: assetName,
-      Issuer: issuer,
-      Supply: initialSupply,
-      Uid: crypto.randomUUID(),
-    };
-    await putItem(client, item);
-    return { message: "Asset registered successfully" };
-  },
+  const options = {
+    hostname: parsedUrl.hostname,
+    port: parsedUrl.port || 443,
+    path: parsedUrl.pathname + parsedUrl.search,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body),
+    },
+  };
 
-  /**
-   * Verifies an asset by updating its Verified status.
-   */
-  AssetVerified: async (client, { assetId, isValid }) => {
-    const current = await getItem(client, assetId);
-    const updated = { ...current, Verified: isValid };
-    await putItem(client, updated);
-    return { message: "Asset verified successfully", isValid };
-  },
-
-  /**
-   * Mints new tokens by incrementing the TokenMinted count.
-   */
-  TokensMinted: async (client, { assetId, amount }) => {
-    const current = await getItem(client, assetId);
-    const currentAmount = BigInt(current.TokenMinted || 0n);
-    const updated = {
-      ...current,
-      TokenMinted: (currentAmount + BigInt(amount)).toString(),
-    };
-    await putItem(client, updated);
-    return { message: "New Token minted successfully", amount };
-  },
-
-  /**
-   * Redeems tokens by incrementing the TokenRedeemed count.
-   */
-  TokensRedeemed: async (client, { assetId, amount }) => {
-    const current = await getItem(client, assetId);
-    const currentAmount = BigInt(current.TokenRedeemed || 0n);
-    const updated = {
-      ...current,
-      TokenRedeemed: (currentAmount + BigInt(amount)).toString(),
-    };
-    await putItem(client, updated);
-    return { message: "Token redeemed successfully", amount };
-  },
-
-  /**
-   * Sends a POST notification to the provided API URL using asset data.
-   * Note: 
-   * Requires CRE workflow deployed on mainnet for full functionality.
-   * In the demo, the action will not be used. 
-   * the purpose of the snippet codes is to show how to send a POST request to CRE.
-   */
-  sendNotification: async (client, { assetId, apiUrl }) => {
-    const item = await getItem(client, assetId);
-    if (!item?.Uid) {
-      throw new Error("Asset UID not found");
-    }
-
-    const postData = JSON.stringify({
-      assetId: Number(assetId),
-      uid: item.Uid,
-    });
-
-    const parsedUrl = new URL(apiUrl);
-    const options = {
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port || 443,
-      path: parsedUrl.pathname + parsedUrl.search,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(postData),
-      },
-    };
-
-    const response = await new Promise((resolve, reject) => {
-      const req = https.request(options, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => resolve({ statusCode: res.statusCode, body: data }));
+  const response = await new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
       });
-      req.on("error", reject);
-      req.write(postData);
-      req.end();
+      res.on("end", () => {
+        resolve({ statusCode: res.statusCode, body: data });
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`POST request failed (${response.statusCode}): ${response.body}`);
+  }
+
+  return response;
+};
+
+const pickCompanyPatch = (params) => {
+  const patch = {};
+  for (const field of COMPANY_ALLOWED_FIELDS) {
+    if (params[field] !== undefined) {
+      patch[field] = params[field];
+    }
+  }
+  return patch;
+};
+
+const buildSyncPayloadsFromCompanyInput = (params, employeeState) => {
+  const payloads = [];
+  const employeeAddress = employeeState.employeeAddress;
+
+  const shouldSyncKyc =
+    params.syncKyc === true ||
+    params.kycVerified !== undefined ||
+    params.identityAddress !== undefined ||
+    params.country !== undefined;
+
+  if (shouldSyncKyc) {
+    const verified = Boolean(employeeState.kycVerified);
+    const kycPayload = {
+      action: "SYNC_KYC",
+      employeeAddress,
+      verified,
+      country: Number(employeeState.country ?? 0),
+    };
+
+    if (verified) {
+      if (!employeeState.identityAddress) {
+        throw new Error("identityAddress is required to sync KYC when kycVerified=true");
+      }
+      kycPayload.identityAddress = employeeState.identityAddress;
+    }
+
+    payloads.push(kycPayload);
+  }
+
+  const shouldSyncEmployment =
+    params.syncEmployment === true || params.employed !== undefined;
+  if (shouldSyncEmployment) {
+    payloads.push({
+      action: "SYNC_EMPLOYMENT_STATUS",
+      employeeAddress,
+      employed: Boolean(employeeState.employed),
+    });
+  }
+
+  const shouldSyncGoal =
+    params.syncGoal === true ||
+    params.goalId !== undefined ||
+    params.goalAchieved !== undefined;
+  if (shouldSyncGoal && employeeState.goalId && employeeState.goalAchieved !== undefined) {
+    payloads.push({
+      action: "SYNC_GOAL",
+      goalId: employeeState.goalId,
+      achieved: Boolean(employeeState.goalAchieved),
+    });
+  }
+
+  const shouldSyncFreeze =
+    params.syncFreezeWallet === true || params.walletFrozen !== undefined;
+  if (shouldSyncFreeze) {
+    payloads.push({
+      action: "SYNC_FREEZE_WALLET",
+      walletAddress: employeeAddress,
+      frozen: Boolean(employeeState.walletFrozen),
+    });
+  }
+
+  if (Array.isArray(params.extraSyncPayloads)) {
+    payloads.push(...params.extraSyncPayloads);
+  }
+
+  return payloads;
+};
+
+const handlers = {
+  readEmployee: async (client, { employeeAddress }) => {
+    const recordId = employeeRecordId(employeeAddress);
+    const item = await getRecord(client, recordId);
+    if (!item) {
+      throw new Error("Employee not found");
+    }
+    return { data: item };
+  },
+
+  CompanyEmployeeInput: async (client, params) => {
+    const normalizedEmployeeAddress = normalizeAddress(params.employeeAddress);
+    const recordId = employeeRecordId(normalizedEmployeeAddress);
+    const patch = pickCompanyPatch(params);
+    const now = new Date().toISOString();
+
+    const employeeState = await upsertRecord(client, recordId, {
+      ...patch,
+      employeeAddress: normalizedEmployeeAddress,
+      entityType: "employee",
+      lastCompanyUpdateAt: now,
+      source: "company",
     });
 
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return {
-        message: "POST request sent successfully",
-        assetId: Number(assetId),
-        uid: item.Uid,
-        apiResponse: response.body,
-      };
-    } else {
-      throw new Error(`POST request failed: ${response.body}`);
+    let syncResponses = [];
+    if (params.apiUrl) {
+      const payloads = buildSyncPayloadsFromCompanyInput(params, employeeState);
+      syncResponses = await Promise.all(
+        payloads.map(async (payload) => {
+          const response = await postJson(params.apiUrl, payload);
+          return {
+            action: payload.action,
+            statusCode: response.statusCode,
+            responseBody: response.body,
+          };
+        }),
+      );
     }
+
+    return {
+      message: "Company input persisted",
+      recordId,
+      syncTriggered: syncResponses.length,
+      syncResponses,
+      data: employeeState,
+    };
+  },
+
+  ManualSyncToCre: async (_client, { apiUrl, payload }) => {
+    const response = await postJson(apiUrl, payload);
+    return {
+      message: "Manual payload synced to CRE",
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    };
+  },
+
+  IdentityRegistered: async (client, { employeeAddress, identityAddress, country }) => {
+    const recordId = employeeRecordId(employeeAddress);
+    const updated = await upsertRecord(client, recordId, {
+      entityType: "employee",
+      employeeAddress: normalizeAddress(employeeAddress),
+      identityAddress: normalizeAddress(identityAddress),
+      country: Number(country),
+      kycVerified: true,
+      lastOnchainEvent: "IdentityRegistered",
+    });
+    return { message: "IdentityRegistered synced from onchain", data: updated };
+  },
+
+  IdentityRemoved: async (client, { employeeAddress }) => {
+    const recordId = employeeRecordId(employeeAddress);
+    const updated = await upsertRecord(client, recordId, {
+      entityType: "employee",
+      employeeAddress: normalizeAddress(employeeAddress),
+      identityAddress: null,
+      kycVerified: false,
+      lastOnchainEvent: "IdentityRemoved",
+    });
+    return { message: "IdentityRemoved synced from onchain", data: updated };
+  },
+
+  CountryUpdated: async (client, { employeeAddress, country }) => {
+    const recordId = employeeRecordId(employeeAddress);
+    const updated = await upsertRecord(client, recordId, {
+      entityType: "employee",
+      employeeAddress: normalizeAddress(employeeAddress),
+      country: Number(country),
+      lastOnchainEvent: "CountryUpdated",
+    });
+    return { message: "CountryUpdated synced from onchain", data: updated };
+  },
+
+  EmploymentStatusUpdated: async (client, { employeeAddress, employed }) => {
+    const recordId = employeeRecordId(employeeAddress);
+    const updated = await upsertRecord(client, recordId, {
+      entityType: "employee",
+      employeeAddress: normalizeAddress(employeeAddress),
+      employed: Boolean(employed),
+      lastOnchainEvent: "EmploymentStatusUpdated",
+    });
+    return { message: "Employment status synced from onchain", data: updated };
+  },
+
+  GrantCreated: async (client, { employeeAddress, amount }) => {
+    const recordId = employeeRecordId(employeeAddress);
+    const updated = await upsertRecord(client, recordId, {
+      entityType: "employee",
+      employeeAddress: normalizeAddress(employeeAddress),
+      grantTotalAmount: String(amount),
+      lastOnchainEvent: "GrantCreated",
+    });
+    return { message: "GrantCreated synced from onchain", data: updated };
+  },
+
+  TokensClaimed: async (client, { employeeAddress, amount }) => {
+    const recordId = employeeRecordId(employeeAddress);
+    const current = (await getRecord(client, recordId)) || {};
+    const claimedBefore = parseBigInt(current.claimedAmount || "0");
+    const claimedAfter = claimedBefore + parseBigInt(amount);
+
+    const updated = await upsertRecord(client, recordId, {
+      ...current,
+      entityType: "employee",
+      employeeAddress: normalizeAddress(employeeAddress),
+      claimedAmount: claimedAfter.toString(),
+      lastClaimedAmount: String(amount),
+      lastOnchainEvent: "TokensClaimed",
+    });
+
+    return { message: "TokensClaimed synced from onchain", data: updated };
+  },
+
+  GrantRevoked: async (client, { employeeAddress, amountForfeited }) => {
+    const recordId = employeeRecordId(employeeAddress);
+    const updated = await upsertRecord(client, recordId, {
+      entityType: "employee",
+      employeeAddress: normalizeAddress(employeeAddress),
+      employed: false,
+      lastRevokedAmount: String(amountForfeited),
+      lastOnchainEvent: "GrantRevoked",
+    });
+    return { message: "GrantRevoked synced from onchain", data: updated };
+  },
+
+  GoalUpdated: async (client, { goalId, achieved }) => {
+    const recordId = goalRecordId(goalId);
+    const updated = await upsertRecord(client, recordId, {
+      entityType: "goal",
+      goalId: String(goalId),
+      achieved: Boolean(achieved),
+      lastOnchainEvent: "GoalUpdated",
+    });
+    return { message: "GoalUpdated synced from onchain", data: updated };
   },
 };
 
-/**
- * Main Lambda handler function.
- * Processes incoming events, validates, executes actions, and returns responses.
- * @param {object} event - The Lambda event object.
- * @returns {Promise<object>} The Lambda response.
- */
-export const handler = async (event) => {
-  const yourAwsRegion = ""; // input your AWS region here 
-
-  if (!yourAwsRegion) {
-    return buildResponse(STATUS_BAD_REQUEST, { error: "region is null, please define the region." });
+const parseEventParams = (event) => {
+  if (event && typeof event === "object" && event.action && !event.body) {
+    return event;
   }
-  
-  // Initialize DynamoDB client with the specified region.
-  const client = new DynamoDBDocumentClient(new DynamoDBClient({ region: yourAwsRegion }));
 
-  // Parse request body as JSON.
+  if (!event?.body) {
+    return {};
+  }
+
+  if (typeof event.body === "string") {
+    return JSON.parse(event.body || "{}");
+  }
+
+  if (typeof event.body === "object") {
+    return event.body;
+  }
+
+  return {};
+};
+
+export const handler = async (event) => {
+  if (!AWS_REGION) {
+    return buildResponse(STATUS_BAD_REQUEST, {
+      error: "AWS region is missing. Set AWS_REGION env var or yourAwsRegion constant.",
+    });
+  }
+
+  const client = DynamoDBDocumentClient.from(new DynamoDBClient({ region: AWS_REGION }));
+
   let params;
   try {
-    params = JSON.parse(event.body || "{}");
+    params = parseEventParams(event);
   } catch {
     return buildResponse(STATUS_BAD_REQUEST, { error: "Invalid JSON in request body" });
   }
 
   const { action } = params;
+  if (!action || !handlers[action]) {
+    return buildResponse(STATUS_BAD_REQUEST, {
+      error: "Invalid action",
+      supportedActions: Object.keys(handlers),
+    });
+  }
 
   try {
-    // Validate action exists and is supported.
-    if (!action || !handlers[action]) {
-      return buildResponse(STATUS_BAD_REQUEST, { error: "Invalid action" });
-    }
-
-    // Validate required parameters for the action.
     validateParams(action, params);
-    
-    // Execute the specific action handler.
     const result = await handlers[action](client, params);
     return buildResponse(STATUS_OK, result);
   } catch (error) {
     console.error("Error:", error);
-    
-    // Handle specific errors with appropriate status codes.
-    if (error.message === "Asset UID not found") {
-      return buildResponse(STATUS_NOT_FOUND, { error: error.message });
+    const message = error?.message || "Internal server error";
+
+    if (message === "Employee not found") {
+      return buildResponse(STATUS_NOT_FOUND, { error: message });
     }
-    if (error.message.startsWith("POST request failed")) {
-      return buildResponse(STATUS_BAD_REQUEST, { error: error.message });
+
+    if (message.startsWith("Missing required parameters")) {
+      return buildResponse(STATUS_BAD_REQUEST, { error: message });
     }
-    return buildResponse(STATUS_SERVER_ERROR, { error: "Internal server error", details: error.message });
+
+    if (message.startsWith("POST request failed")) {
+      return buildResponse(STATUS_BAD_REQUEST, { error: message });
+    }
+
+    return buildResponse(STATUS_SERVER_ERROR, {
+      error: "Internal server error",
+      details: message,
+    });
   }
 };
