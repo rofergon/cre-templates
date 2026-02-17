@@ -12,7 +12,7 @@ contract IdentityRegistry is IIdentityRegistry, Ownable {
     event IdentityRemoved(address indexed userAddress, address indexed identity);
     event CountryUpdated(address indexed userAddress, uint16 country);
 
-    constructor() Ownable(msg.sender) {}
+    constructor() {}
 
     function registerIdentity(address _userAddress, address _identity, uint16 _country) external override onlyOwner {
         require(_userAddress != address(0), "Invalid address");
