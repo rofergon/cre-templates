@@ -11,6 +11,35 @@ contract IdentityRegistry is IIdentityRegistry, Ownable {
     event IdentityRegistered(address indexed userAddress, address indexed identity, uint16 country);
     event IdentityRemoved(address indexed userAddress, address indexed identity);
     event CountryUpdated(address indexed userAddress, uint16 country);
+    event IdentityStorageUpdated(address indexed oldIdentityStorage, address indexed newIdentityStorage);
+    event ClaimTopicsRegistryUpdated(address indexed oldClaimTopicsRegistry, address indexed newClaimTopicsRegistry);
+    event TrustedIssuersRegistryUpdated(address indexed oldTrustedIssuersRegistry, address indexed newTrustedIssuersRegistry);
+    event TopicsRegistryUpdated(address indexed oldTopicsRegistry, address indexed newTopicsRegistry);
+
+    address public override identityStorage;
+    address public override claimTopicsRegistry;
+    address public override trustedIssuersRegistry;
+    address public override topicsRegistry;
+
+    function setIdentityStorage(address _identityStorage) external onlyOwner {
+        emit IdentityStorageUpdated(identityStorage, _identityStorage);
+        identityStorage = _identityStorage;
+    }
+
+    function setClaimTopicsRegistry(address _claimTopicsRegistry) external onlyOwner {
+        emit ClaimTopicsRegistryUpdated(claimTopicsRegistry, _claimTopicsRegistry);
+        claimTopicsRegistry = _claimTopicsRegistry;
+    }
+
+    function setTrustedIssuersRegistry(address _trustedIssuersRegistry) external onlyOwner {
+        emit TrustedIssuersRegistryUpdated(trustedIssuersRegistry, _trustedIssuersRegistry);
+        trustedIssuersRegistry = _trustedIssuersRegistry;
+    }
+
+    function setTopicsRegistry(address _topicsRegistry) external onlyOwner {
+        emit TopicsRegistryUpdated(topicsRegistry, _topicsRegistry);
+        topicsRegistry = _topicsRegistry;
+    }
 
     constructor() {}
 

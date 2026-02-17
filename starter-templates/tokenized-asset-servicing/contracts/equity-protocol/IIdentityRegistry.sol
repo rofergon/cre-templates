@@ -40,4 +40,24 @@ interface IIdentityRegistry {
      * @param _userAddress The address of the user
      */
     function isVerified(address _userAddress) external view returns (bool);
+
+    /**
+     * @dev Returns the topics registry address
+     */
+    function topicsRegistry() external view returns (address);
+
+    /**
+     * @dev Returns the trusted issuers registry address
+     */
+    function trustedIssuersRegistry() external view returns (address);
+
+    /**
+     * @dev Returns the claim topics registry address
+     */
+    function claimTopicsRegistry() external view returns (address);
+
+    /**
+     * @dev Returns the identity storage address
+     */
+    function identityStorage() external view returns (address);
 }
