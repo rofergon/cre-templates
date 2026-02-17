@@ -41,7 +41,7 @@ abstract contract ReceiverTemplate is IReceiver, Ownable {
   /// @dev The forwarder address is required for security - it ensures only verified reports are processed
   constructor(
     address _forwarderAddress
-  ) Ownable(msg.sender) {
+  ) {
     if (_forwarderAddress == address(0)) {
       revert InvalidForwarderAddress();
     }
