@@ -1,12 +1,12 @@
 {
-  "url": "https://<YOUR_LAMBDA_FUNCTION_URL>",
-  "evms": [
-    {
-      "receiverAddress": "0x0000000000000000000000000000000000000000",
-      "identityRegistryAddress": "0x0000000000000000000000000000000000000000",
-      "employeeVestingAddress": "0x0000000000000000000000000000000000000000",
-      "chainSelectorName": "ethereum-testnet-sepolia-base-1",
-      "gasLimit": "1000000"
-    }
-  ]
+    "url": "https://bxxeayal5jz6m4mo5j6xyobs5e0ytvap.lambda-url.us-east-2.on.aws/",
+    "evms": [
+        {
+            "receiverAddress": "0x69d2FEb2299424f9c6a14fc2D87d9B3f7F819165",
+            "identityRegistryAddress": "0x66f6ae7Dc6f48f9c62360d5dFaf1883841Fc9cce",
+            "employeeVestingAddress": "0x96f559Be216Af03CB9bFe42A6E84c8B41841b386",
+            "chainSelectorName": "ethereum-testnet-sepolia-base-1",
+            "gasLimit": "1000000"
+        }
+    ]
 }

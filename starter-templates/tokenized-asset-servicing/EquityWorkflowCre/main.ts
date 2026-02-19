@@ -22,7 +22,7 @@ import {
 import { z } from "zod";
 
 const configSchema = z.object({
-  url: z.string(),
+  url: z.string().optional(),
   evms: z
     .array(
       z.object({
@@ -107,14 +107,14 @@ const eventAbi = parseAbi([
 
 const postData = (
   sendRequester: HTTPSendRequester,
-  config: Config,
+  lambdaUrl: string,
   lambdaPayload: Record<string, string | number | boolean>,
 ): PostResponse => {
   const bodyBytes = new TextEncoder().encode(JSON.stringify(lambdaPayload));
   const body = Buffer.from(bodyBytes).toString("base64");
 
   const req = {
-    url: config.url,
+    url: lambdaUrl,
     method: "POST" as const,
     body,
     headers: {
@@ -341,10 +341,21 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     return "Ignored event";
   }
 
+  // Try secrets vault first (production), fall back to config url (simulation)
+  let lambdaUrl: string;
+  try {
+    lambdaUrl = runtime.getSecret({ id: "LAMBDA_URL" }).result().value;
+  } catch {
+    if (!runtime.config.url) {
+      throw new Error("LAMBDA_URL secret not found and no url in config");
+    }
+    lambdaUrl = runtime.config.url;
+  }
+
   const httpClient = new cre.capabilities.HTTPClient();
   const resp = httpClient
     .sendRequest(runtime, postData, consensusIdenticalAggregation<PostResponse>())(
-      runtime.config,
+      lambdaUrl,
       lambdaPayload,
     )
     .result();

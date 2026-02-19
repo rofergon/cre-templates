@@ -4,7 +4,9 @@
   "main": "dist/main.js",
   "private": true,
   "scripts": {
-    "postinstall": "bun x cre-setup"
+    "postinstall": "bun x cre-setup",
+    "test:sync-write": "node ./tests/run-sync-write-test.mjs",
+    "test:lambda-sync": "node ./tests/run-lambda-sync-simulation.mjs"
   },
   "license": "UNLICENSED",
   "dependencies": {

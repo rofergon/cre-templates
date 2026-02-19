@@ -1,0 +1,7 @@
+{
+  "action": "SYNC_KYC",
+  "employeeAddress": "0x1111111111111111111111111111111111111111",
+  "verified": true,
+  "identityAddress": "0x2222222222222222222222222222222222222222",
+  "country": 840
+}

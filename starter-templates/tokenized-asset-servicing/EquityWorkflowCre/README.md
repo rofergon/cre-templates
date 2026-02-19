@@ -105,3 +105,35 @@ Notes:
 
 - In simulation mode without `--broadcast`, writes are dry-run and tx hash is typically `0x`.
 - Workflow code is compiled to WASM by CRE CLI in simulation.
+
+## E2E sync-write test
+
+This repository includes an automated integration test:
+
+- `tests/run-sync-write-test.mjs`
+
+What it validates:
+
+1. Sends `SYNC_KYC` via CRE HTTP trigger (`trigger-index 0`) with `--broadcast`
+2. Reads the tx receipt on Base Sepolia and finds the `IdentityRegistry` event index
+3. Replays CRE EVM log trigger (`trigger-index 1`) for that tx/event
+4. Calls Lambda `readEmployee` and verifies the record is synchronized in DynamoDB
+
+Run from `EquityWorkflowCre`:
+
+```bash
+npm run test:sync-write
+```
+
+Optional RPC override:
+
+```bash
+BASE_SEPOLIA_RPC_URL=https://sepolia.base.org/ npm run test:sync-write
+```
+
+If your account gets transient nonce replacement errors (`replacement transaction underpriced`), the test
+automatically attempts a nonce-bump transaction (including forced nonce tick when providers do not expose pending txs). You can disable this behavior:
+
+```bash
+AUTO_BUMP_NONCE=false npm run test:sync-write
+```
