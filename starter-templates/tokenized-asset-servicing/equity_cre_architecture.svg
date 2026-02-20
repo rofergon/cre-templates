@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="100%" height="100%" style="background-color: #f3f8fb; font-family: 'Segoe UI', 'Inter', -apple-system, sans-serif;">
+  <defs>
+    <!-- Shadows -->
+    <filter id="shadow-md" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+    <filter id="shadow-lg" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+    
+    <!-- Gradients -->
+    <linearGradient id="web2-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#eaf1fc"/>
+    </linearGradient>
+    <linearGradient id="cre-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2a5ada"/>
+      <stop offset="100%" stop-color="#193db0"/>
+    </linearGradient>
+    <linearGradient id="web3-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#343a40"/>
+      <stop offset="100%" stop-color="#1e2225"/>
+    </linearGradient>
+
+    <!-- Arrow Markers -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2a5ada"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="600" y="60" font-size="36" font-weight="bold" fill="#1e293b" text-anchor="middle">Equity Servicing Architecture (Chainlink CRE)</text>
+  <text x="600" y="90" font-size="16" fill="#64748b" text-anchor="middle">Decentralized Oracle Network integration between Web2 Systems and Smart Contracts</text>
+
+  <!-- Big Columns Backgrounds -->
+  <!-- Web2 -->
+  <rect x="40" y="150" width="280" height="580" rx="16" fill="url(#web2-grad)" stroke="#cbd5e1" stroke-width="2" filter="url(#shadow-md)"/>
+  <text x="180" y="195" font-size="24" font-weight="bold" fill="#334155" text-anchor="middle">Web2 / Off-Chain</text>
+  <text x="180" y="215" font-size="14" fill="#64748b" text-anchor="middle">(HR Systems &amp; Lambda)</text>
+
+  <!-- Chainlink CRE -->
+  <rect x="440" y="150" width="340" height="580" rx="16" fill="#ffffff" stroke="#2a5ada" stroke-width="3" filter="url(#shadow-lg)"/>
+  <rect x="440" y="150" width="340" height="80" rx="16" fill="url(#cre-grad)"/>
+  <path d="M 440 220 L 780 220 L 780 230 L 440 230 Z" fill="url(#cre-grad)"/>
+  <text x="610" y="195" font-size="21" font-weight="bold" fill="#ffffff" text-anchor="middle">Chainlink Runtime Environment</text>
+  <text x="610" y="215" font-size="14" fill="#e2e8f0" text-anchor="middle">(Decentralized Workflow Runner)</text>
+  
+  <!-- Web3 -->
+  <rect x="880" y="150" width="280" height="580" rx="16" fill="url(#web3-grad)" filter="url(#shadow-md)"/>
+  <text x="1020" y="195" font-size="24" font-weight="bold" fill="#ffffff" text-anchor="middle">Web3 / On-Chain</text>
+  <text x="1020" y="215" font-size="14" fill="#94a3b8" text-anchor="middle">(Base Sepolia EVM)</text>
+
+  <!-- ==================== WEB 2 COMPONENTS ==================== -->
+  
+  <!-- HR Dashboard -->
+  <rect x="60" y="270" width="240" height="80" rx="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" filter="url(#shadow-md)"/>
+  <text x="180" y="305" font-size="18" font-weight="bold" fill="#1e293b" text-anchor="middle">HR / Admin Dashboard</text>
+  <text x="180" y="325" font-size="12" fill="#64748b" text-anchor="middle">Triggers KYC &amp; Goals</text>
+
+  <!-- Lambda Connect -->
+  <rect x="60" y="470" width="240" height="100" rx="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" filter="url(#shadow-md)"/>
+  <text x="180" y="500" font-size="18" font-weight="bold" fill="#1e293b" text-anchor="middle">AWS Lambda / Backend</text>
+  <text x="180" y="520" font-size="12" fill="#64748b" text-anchor="middle">Sends JSON &amp; Receives Webhooks</text>
+  <text x="180" y="540" font-size="12" fill="#2a5ada" font-weight="bold" text-anchor="middle">HTTPS / JSON</text>
+
+
+  <!-- ==================== CRE COMPONENTS ==================== -->
+
+  <!-- HTTP Trigger -->
+  <rect x="460" y="270" width="300" height="60" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="2"/>
+  <text x="610" y="300" font-size="16" font-weight="bold" fill="#166534" text-anchor="middle">HTTP Trigger (Webhook)</text>
+  <text x="610" y="318" font-size="12" fill="#166534" text-anchor="middle">Listens for Off-chain Syncs</text>
+
+  <!-- Workflow Logic main.ts -->
+  <rect x="460" y="370" width="300" height="140" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="2"/>
+  <text x="610" y="400" font-size="18" font-weight="bold" fill="#1e3a8a" text-anchor="middle">TypeScript Workflow (main.ts)</text>
+  
+  <rect x="480" y="415" width="120" height="36" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="540" y="438" font-size="11" font-weight="bold" fill="#475569" text-anchor="middle">ABI Encoding</text>
+
+  <rect x="620" y="415" width="120" height="36" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="680" y="438" font-size="11" font-weight="bold" fill="#475569" text-anchor="middle">ABI Decoding</text>
+
+  <rect x="500" y="460" width="220" height="36" rx="4" fill="#ffffff" stroke="#2a5ada" stroke-width="1"/>
+  <text x="610" y="483" font-size="12" font-weight="bold" fill="#2a5ada" text-anchor="middle">Decentralized Oracle Consensus</text>
+
+  <!-- EVM Log Trigger -->
+  <rect x="460" y="550" width="300" height="60" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="2"/>
+  <text x="610" y="580" font-size="16" font-weight="bold" fill="#166534" text-anchor="middle">EVM Log Trigger</text>
+  <text x="610" y="598" font-size="12" fill="#166534" text-anchor="middle">Listens for On-chain Events</text>
+
+
+  <!-- ==================== WEB3 COMPONENTS ==================== -->
+
+  <!-- Forwarder -->
+  <rect x="900" y="270" width="240" height="40" rx="6" fill="#475569" stroke="#64748b" stroke-width="2"/>
+  <text x="1020" y="295" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">Chainlink DON (Forwarder)</text>
+
+  <!-- Receiver Contract -->
+  <rect x="900" y="350" width="240" height="80" rx="8" fill="#6366f1" stroke="#818cf8" stroke-width="2" filter="url(#shadow-md)"/>
+  <text x="1020" y="385" font-size="16" font-weight="bold" fill="#ffffff" text-anchor="middle">EquityWorkflowReceiver.sol</text>
+  <text x="1020" y="410" font-size="12" fill="#c7d2fe" text-anchor="middle">Decodes ABI &amp; Routes Calls</text>
+
+  <!-- Target Contracts Container -->
+  <rect x="890" y="460" width="260" height="230" rx="8" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="4"/>
+  <text x="1020" y="485" font-size="12" font-weight="bold" fill="#94a3b8" text-anchor="middle">ERC-3643 Tokenized Asset Protocol</text>
+
+  <!-- Identity Registry -->
+  <rect x="900" y="500" width="240" height="40" rx="4" fill="#334155" stroke="#475569" stroke-width="1"/>
+  <text x="1020" y="525" font-size="14" font-weight="bold" fill="#f8fafc" text-anchor="middle">IdentityRegistry (KYC / Rules)</text>
+
+  <!-- Employee Vesting -->
+  <rect x="900" y="560" width="240" height="40" rx="4" fill="#334155" stroke="#475569" stroke-width="1"/>
+  <text x="1020" y="585" font-size="14" font-weight="bold" fill="#f8fafc" text-anchor="middle">EmployeeVesting (Stats / Grants)</text>
+
+  <!-- Token -->
+  <rect x="900" y="620" width="240" height="40" rx="4" fill="#334155" stroke="#475569" stroke-width="1"/>
+  <text x="1020" y="645" font-size="14" font-weight="bold" fill="#f8fafc" text-anchor="middle">Equity Token (ERC-3643 TVL)</text>
+
+
+  <!-- ==================== CONNECTING ARROWS ==================== -->
+  
+  <!-- Web2 to CRE -->
+  <!-- HR down to Lambda -->
+  <path d="M 180 350 L 180 460" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" stroke-dasharray="4"/>
+  
+  <!-- Lambda to HTTP Trigger (Top Flow) -->
+  <path d="M 300 520 L 340 520 L 340 300 L 450 300" fill="none" stroke="#2a5ada" stroke-width="3" marker-end="url(#arrowBlue)"/>
+  <rect x="355" y="288" width="80" height="24" rx="12" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="395" y="304" font-size="10" font-weight="bold" fill="#1e3a8a" text-anchor="middle">POST JSON</text>
+  
+  <!-- CRE Flow: HTTP Trigger to main.ts -->
+  <path d="M 610 330 L 610 360" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  
+  <!-- CRE Flow: main.ts to DON Forwarder (Middle Flow) -->
+  <path d="M 760 440 L 800 440 L 800 290 L 890 290" fill="none" stroke="#2a5ada" stroke-width="3" marker-end="url(#arrowBlue)"/>
+  <rect x="755" y="428" width="86" height="24" rx="12" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="798" y="444" font-size="10" font-weight="bold" fill="#1e3a8a" text-anchor="middle">writeReport()</text>
+
+  <!-- Inside Web3 Routing Arrows -->
+  <path d="M 1020 310 L 1020 340" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  
+  <!-- Main Backbone -->
+  <path d="M 1020 430 L 1020 445 L 1175 445 L 1175 640" fill="none" stroke="#64748b" stroke-width="2" />
+  <!-- To Identity -->
+  <path d="M 1175 520 L 1145 520" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- To Vesting -->
+  <path d="M 1175 580 L 1145 580" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- To Token -->
+  <path d="M 1175 640 L 1145 640" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+
+  <!-- ==================== REVERSE FLOW ==================== -->
+  
+  <!-- Web3 to CRE Log trigger -->
+  <!-- Target Contracts out -->
+  <path d="M 890 580 L 770 580" fill="none" stroke="#10b981" stroke-width="3" marker-end="url(#arrowGreen)"/>
+  <rect x="800" y="568" width="60" height="24" rx="12" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1"/>
+  <text x="830" y="584" font-size="10" font-weight="bold" fill="#065f46" text-anchor="middle">EVM Log</text>
+
+  <!-- EVM Log up to main.ts -->
+  <path d="M 610 550 L 610 520" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- main.ts to Lambda -->
+  <path d="M 460 490 L 310 490" fill="none" stroke="#10b981" stroke-width="3" marker-end="url(#arrowGreen)"/>
+  <rect x="345" y="478" width="80" height="24" rx="12" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1"/>
+  <text x="385" y="494" font-size="10" font-weight="bold" fill="#065f46" text-anchor="middle">POST JSON</text>
+
+
+  <!-- Legend -->
+  <rect x="40" y="650" width="300" height="100" rx="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" filter="url(#shadow-md)"/>
+  <text x="55" y="675" font-size="14" font-weight="bold" fill="#1e293b">Flow Legend</text>
+  
+  <line x1="55" y1="695" x2="95" y2="695" stroke="#2a5ada" stroke-width="3" marker-end="url(#arrowBlue)"/>
+  <text x="110" y="700" font-size="12" fill="#475569">Web2 -> Smart Contracts (Write Action)</text>
+  
+  <line x1="95" y1="725" x2="55" y2="725" stroke="#10b981" stroke-width="3" marker-end="url(#arrowGreen)"/>
+  <text x="110" y="730" font-size="12" fill="#475569">Smart Contracts -> Web2 (Events / Sync)</text>
+
+</svg>
