@@ -282,6 +282,7 @@ const run = async () => {
             "--broadcast",
         ]);
 
+        console.log(output);
         const txHash = extractTxHash(output);
         txHashes.push({ action: payload.action, txHash });
         console.log(`   ✓ writeReport txHash: ${txHash}`);
@@ -326,7 +327,7 @@ const run = async () => {
         // Determine trigger-index (1 = IdentityRegistry, 2 = EmployeeVesting)
         const triggerIndex = eventLog.address.toLowerCase() === identityRegistryAddress ? "1" : "2";
 
-        await runCre([
+        const logOutput = await runCre([
             "workflow",
             "simulate",
             "./EquityWorkflowCre",
@@ -342,6 +343,7 @@ const run = async () => {
             "--broadcast",
         ]);
 
+        console.log(logOutput);
         console.log(`   ✓ CRE log trigger forwarded ${action} event to Lambda`);
     }
 
