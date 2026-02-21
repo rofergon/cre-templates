@@ -41,7 +41,7 @@
   <!-- Big Columns Backgrounds -->
   <!-- Web2 -->
   <rect x="40" y="150" width="280" height="580" rx="16" fill="url(#web2-grad)" stroke="#cbd5e1" stroke-width="2" filter="url(#shadow-md)"/>
-  <text x="180" y="195" font-size="24" font-weight="bold" fill="#334155" text-anchor="middle">Web2 / Off-Chain</text>
+  <text x="180" y="195" font-size="22" font-weight="bold" fill="#334155" text-anchor="middle">Web2 / Corporate APIs</text>
   <text x="180" y="215" font-size="14" fill="#64748b" text-anchor="middle">(HR Systems &amp; Lambda)</text>
 
   <!-- Chainlink CRE -->
