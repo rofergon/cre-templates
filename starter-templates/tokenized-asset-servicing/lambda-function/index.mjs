@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import https from "https";
 import { URL } from "url";
 
@@ -15,6 +15,7 @@ const AWS_REGION = process.env.AWS_REGION || yourAwsRegion;
 
 const REQUIRED_FIELDS = {
   readEmployee: ["employeeAddress"],
+  listEmployees: [],
   CompanyEmployeeInput: ["employeeAddress"],
   ManualSyncToCre: ["apiUrl", "payload"],
   IdentityRegistered: ["employeeAddress", "identityAddress", "country"],
@@ -228,6 +229,19 @@ const handlers = {
       throw new Error("Employee not found");
     }
     return { data: item };
+  },
+
+  listEmployees: async (client) => {
+    const command = new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "entityType = :type",
+      ExpressionAttributeValues: {
+        ":type": "employee"
+      }
+    });
+
+    const { Items } = await client.send(command);
+    return { data: Items || [] };
   },
 
   CompanyEmployeeInput: async (client, params) => {
