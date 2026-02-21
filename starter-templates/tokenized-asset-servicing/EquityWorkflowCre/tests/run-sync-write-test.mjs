@@ -18,13 +18,6 @@ const envPath = resolve(projectRoot, ".env");
 const config = JSON.parse(readFileSync(configPath, "utf-8"));
 const payload = JSON.parse(readFileSync(payloadPath, "utf-8"));
 
-const rpcUrl =
-  process.env.BASE_SEPOLIA_RPC_URL ||
-  "https://base-sepolia.gateway.tenderly.co/3qeYD3iE02OOzPOCANms01/";
-const lambdaUrl = process.env.LAMBDA_URL || envFromFile.LAMBDA_URL || config.url;
-const identityRegistryAddress = config.evms[0].identityRegistryAddress.toLowerCase();
-const autoBumpNonce = process.env.AUTO_BUMP_NONCE !== "false";
-
 const parseEnvFile = (path) => {
   if (!existsSync(path)) return {};
   const text = readFileSync(path, "utf-8");
@@ -50,6 +43,14 @@ const normalizePrivateKey = (value) => {
 };
 
 const envFromFile = parseEnvFile(envPath);
+
+const rpcUrl =
+  process.env.BASE_SEPOLIA_RPC_URL ||
+  "https://base-sepolia.gateway.tenderly.co/3qeYD3iE02OOzPOCANms01/";
+const lambdaUrl = process.env.LAMBDA_URL || envFromFile.LAMBDA_URL || config.url;
+const identityRegistryAddress = config.evms[0].identityRegistryAddress.toLowerCase();
+const autoBumpNonce = process.env.AUTO_BUMP_NONCE !== "false";
+
 const normalizedPk = normalizePrivateKey(
   process.env.CRE_ETH_PRIVATE_KEY ?? envFromFile.CRE_ETH_PRIVATE_KEY,
 );
