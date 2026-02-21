@@ -95,23 +95,26 @@ cre workflow simulate ./EquityWorkflowCre --target local-simulation
 
 *(Note: Without the `--broadcast` flag, writes are dry-run only. Transactions will reflect a hash of `0x`).*
 
-### 4. End-to-End Integration Test (3-Tier Simulation)
-Run the full 3-tier architecture simulation that validates the complete round-trip: **Lambda (AWS) → CRE → Blockchain → CRE → Lambda → DynamoDB**.
+### 4. Interactive Test Runner
+Use the interactive CLI to execute sync actions with custom data, or run the full automated round-trip test:
 
 ```bash
 cd EquityWorkflowCre
-node tests/run-lambda-sync-simulation.mjs
+node tests/run-tests.mjs
 ```
 
-This script:
-1. Persists employee data in DynamoDB via the Lambda `CompanyEmployeeInput` action.
-2. Dynamically builds the sync payloads (`SYNC_KYC`, `SYNC_EMPLOYMENT_STATUS`, etc.) from the stored employee state.
-3. Submits each payload through `cre workflow simulate --broadcast` to write the report on-chain.
-4. Fetches the transaction receipt and identifies the correct event log and trigger index.
-5. Runs the CRE LogTrigger to forward the on-chain event back to the Lambda backend.
-6. Verifies the full round-trip by reading the employee record from DynamoDB and asserting all fields match.
+The menu lets you:
+- **Register/Update Employee** (`SYNC_KYC`) — enter wallet, identity, country, KYC status
+- **Update Employment Status** — activate or terminate an employee
+- **Update Performance Goal** — mark goals as achieved
+- **Freeze/Unfreeze Wallet** — freeze wallets on the ERC-3643 Token
+- **Full 3-Tier Automated Test** — runs the complete round-trip with default data
+- **Read Employee Record** — query DynamoDB without on-chain interaction
+- **List All Employees** — fetch and display a table of all registered employees in DynamoDB without on-chain interaction
 
-This test requires `LAMBDA_URL` and `CRE_ETH_PRIVATE_KEY` in your `.env` file (or as environment variables), along with a properly configured `config.staging.json`.
+Each option follows the full flow: **Lambda → CRE → Blockchain → CRE → Lambda → DynamoDB**.
+
+This requires `LAMBDA_URL` and `CRE_ETH_PRIVATE_KEY` in your `.env` file, along with a properly configured `config.staging.json`.
 
 ## Troubleshooting
 
