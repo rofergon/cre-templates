@@ -6,19 +6,32 @@ import "./IIdentityRegistry.sol";
 import "./IERC3643.sol";
 import "./EmployeeVesting.sol";
 
-/// @notice Receiver contract that maps CRE workflow reports into equity protocol actions.
-/// @dev The contract must be granted ownership/oracle permissions on target contracts.
+/// @title EquityWorkflowReceiver
+/// @notice Receives CRE workflow reports and dispatches them to the Equity Protocol.
+///
+///  Action Types:
+///    0 = SYNC_KYC              → IdentityRegistry
+///    1 = SYNC_EMPLOYMENT_STATUS → EmployeeVesting.updateEmploymentStatus()
+///    2 = SYNC_GOAL             → EmployeeVesting.setGoalAchieved()
+///    3 = SYNC_FREEZE_WALLET    → Token.setAddressFrozen()
+///    4 = SYNC_CREATE_GRANT     → EmployeeVesting.createGrant() [oracle]
+///
+/// @dev This contract must hold:
+///   - Ownership of IdentityRegistry  (for registerIdentity / deleteIdentity / setCountry)
+///   - Ownership of Token             (for setAddressFrozen)
+///   - Oracle rights on EmployeeVesting (for updateEmploymentStatus, setGoalAchieved, createGrant)
 contract EquityWorkflowReceiver is ReceiverTemplate {
     enum ActionType {
-        SYNC_KYC,
-        SYNC_EMPLOYMENT_STATUS,
-        SYNC_GOAL,
-        SYNC_FREEZE_WALLET
+        SYNC_KYC,               // 0
+        SYNC_EMPLOYMENT_STATUS,  // 1
+        SYNC_GOAL,               // 2
+        SYNC_FREEZE_WALLET,      // 3
+        SYNC_CREATE_GRANT        // 4
     }
 
     IIdentityRegistry public identityRegistry;
-    EmployeeVesting public employeeVesting;
-    IERC3643 public token;
+    EmployeeVesting   public employeeVesting;
+    IERC3643          public token;
 
     event SyncActionExecuted(ActionType indexed actionType, bytes payload);
     event TargetsUpdated(
@@ -39,6 +52,10 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         _setTargets(_identityRegistry, _employeeVesting, _token);
     }
 
+    // ──────────────────────────────────────────────────────
+    // Admin
+    // ──────────────────────────────────────────────────────
+
     function setTargets(
         address _identityRegistry,
         address _employeeVesting,
@@ -56,16 +73,18 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
             _identityRegistry == address(0) ||
             _employeeVesting == address(0) ||
             _token == address(0)
-        ) {
-            revert ZeroAddress();
-        }
+        ) revert ZeroAddress();
 
         identityRegistry = IIdentityRegistry(_identityRegistry);
-        employeeVesting = EmployeeVesting(_employeeVesting);
-        token = IERC3643(_token);
+        employeeVesting  = EmployeeVesting(_employeeVesting);
+        token            = IERC3643(_token);
 
         emit TargetsUpdated(_identityRegistry, _employeeVesting, _token);
     }
+
+    // ──────────────────────────────────────────────────────
+    // CRE report dispatcher
+    // ──────────────────────────────────────────────────────
 
     function _processReport(bytes calldata report) internal override {
         (uint8 rawActionType, bytes memory payload) = abi.decode(report, (uint8, bytes));
@@ -79,6 +98,8 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
             _processGoalPayload(payload);
         } else if (actionType == ActionType.SYNC_FREEZE_WALLET) {
             _processFreezeWalletPayload(payload);
+        } else if (actionType == ActionType.SYNC_CREATE_GRANT) {
+            _processCreateGrantPayload(payload);
         } else {
             revert UnsupportedAction(rawActionType);
         }
@@ -86,25 +107,23 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         emit SyncActionExecuted(actionType, payload);
     }
 
+    // ──────────────────────────────────────────────────────
+    // Action processors
+    // ──────────────────────────────────────────────────────
+
     function _processKycPayload(bytes memory payload) internal {
-        (address employee, bool verified, address identity, uint16 country) = abi.decode(
-            payload,
-            (address, bool, address, uint16)
-        );
+        (address employee, bool verified, address identity, uint16 country) =
+            abi.decode(payload, (address, bool, address, uint16));
 
         if (verified) {
             address currentIdentity = identityRegistry.identity(employee);
-
-            if (currentIdentity == address(0)) {
-                identityRegistry.registerIdentity(employee, identity, country);
-            } else if (currentIdentity != identity) {
+            if (currentIdentity == address(0) || currentIdentity != identity) {
                 identityRegistry.registerIdentity(employee, identity, country);
             } else {
                 identityRegistry.setCountry(employee, country);
             }
         } else {
-            address currentIdentity = identityRegistry.identity(employee);
-            if (currentIdentity != address(0)) {
+            if (identityRegistry.identity(employee) != address(0)) {
                 identityRegistry.deleteIdentity(employee);
             }
         }
@@ -123,5 +142,30 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
     function _processFreezeWalletPayload(bytes memory payload) internal {
         (address wallet, bool frozen) = abi.decode(payload, (address, bool));
         token.setAddressFrozen(wallet, frozen);
+    }
+
+    /// @notice Creates a vesting grant via CRE.
+    ///         Requires EmployeeVesting to be pre-funded with sufficient tokens
+    ///         (owner calls EmployeeVesting.fundVesting() before this is used).
+    function _processCreateGrantPayload(bytes memory payload) internal {
+        (
+            address employee,
+            uint256 amount,
+            uint256 startTime,
+            uint256 cliffDuration,
+            uint256 vestingDuration,
+            bool    isRevocable,
+            bytes32 performanceGoalId
+        ) = abi.decode(payload, (address, uint256, uint256, uint256, uint256, bool, bytes32));
+
+        employeeVesting.createGrant(
+            employee,
+            amount,
+            startTime,
+            cliffDuration,
+            vestingDuration,
+            isRevocable,
+            performanceGoalId
+        );
     }
 }
