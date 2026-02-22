@@ -11,10 +11,14 @@ This workflow orchestrates bidirectional sync:
 
 Send one of these JSON payloads to the CRE HTTP trigger:
 
-- `SYNC_KYC`
-- `SYNC_EMPLOYMENT_STATUS`
-- `SYNC_GOAL`
-- `SYNC_FREEZE_WALLET`
+| Action | ID | Description |
+|---|---|---|
+| `SYNC_KYC` | 0 | Register/update employee KYC identity |
+| `SYNC_EMPLOYMENT_STATUS` | 1 | Activate or terminate an employee |
+| `SYNC_GOAL` | 2 | Mark a performance goal as achieved/pending |
+| `SYNC_FREEZE_WALLET` | 3 | Freeze or unfreeze a token wallet |
+| `SYNC_CREATE_GRANT` | 4 | Create an on-chain vesting grant |
+| `SYNC_BATCH` | 5 | Process multiple actions in a single transaction |
 
 Example payloads:
 
@@ -30,19 +34,16 @@ Example payloads:
 
 ```json
 {
-  "action": "SYNC_EMPLOYMENT_STATUS",
-  "employeeAddress": "0x1111111111111111111111111111111111111111",
-  "employed": false
+  "action": "SYNC_BATCH",
+  "batches": [
+    { "action": "SYNC_KYC", "employeeAddress": "0x...", "verified": true, "identityAddress": "0x...", "country": 840 },
+    { "action": "SYNC_EMPLOYMENT_STATUS", "employeeAddress": "0x...", "employed": true },
+    { "action": "SYNC_GOAL", "goalId": "0x000...001", "achieved": true }
+  ]
 }
 ```
 
-```json
-{
-  "action": "SYNC_GOAL",
-  "goalId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "achieved": true
-}
-```
+> **Gas savings:** `SYNC_BATCH` bundles multiple actions into one transaction, paying the 21,000 gas base overhead only once instead of per-action (~95% overhead reduction for 20+ actions).
 
 ## Onchain events forwarded to Lambda
 
