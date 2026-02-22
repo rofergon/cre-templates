@@ -31,10 +31,10 @@ LAMBDA_URL=https://<your-id>.lambda-url.us-east-2.on.aws/
 
 | Contract | Address |
 |---|---|
-| `EquityWorkflowReceiver` | `0x69d2FEb2299424f9c6a14fc2D87d9B3f7F819165` |
-| `IdentityRegistry` | `0x66f6ae7Dc6f48f9c62360d5dFaf1883841Fc9cce` |
-| `EmployeeVesting` | `0x96f559Be216Af03CB9bFe42A6E84c8B41841b386` |
-| `Token` (ERC-3643, `EQT`) | `0x8a6aea980aa058ba27ba395ea550413c776792f9` |
+| `EquityWorkflowReceiver` | `0x1a8d23329cf8641c6645b15Da2896Bd307b56B4a` |
+| `IdentityRegistry` | `0x1Ee184656d3E440c04bB874FDBdDA8Ba07F3E1A6` |
+| `EmployeeVesting` | `0xe875A81E95c276816e877dDC03A153465d0D9999` |
+| `Token` (ERC-3643, `EQT`) | `0xB4FE5972D8cD70494DE061471bb59BAC6F7c3c4F` |
 
 > `IdentityRegistry` and `Token` ownership have been transferred to `EquityWorkflowReceiver`.  
 > `EquityWorkflowReceiver` is also the sole authorized oracle in `EmployeeVesting`.  
@@ -67,8 +67,8 @@ On startup the script:
 5) Full 3-Tier Round-Trip      — Automated KYC sync with default test data
 6) Read Employee Record        — Query DynamoDB + live on-chain state summary
 7) List All Employees          — Table view of all DynamoDB employee records
-8) Create Vesting Grant    — DynamoDB metadata + CRE SYNC_EMPLOYMENT_STATUS on-chain
-9) Automated Full Sequence     — KYC → Employment → Goal → Freeze in one run
+8) Create Vesting Grant        — DynamoDB metadata + CRE SYNC_CREATE_GRANT on-chain
+9) Automated Bulk Sequence     — Loads mock-employees.json, sends SYNC_BATCH
 0) Exit
 ```
 
@@ -259,18 +259,19 @@ Once `GrantCreated` is emitted, **CRE log trigger 2** will automatically sync it
 
 ---
 
-### Option 9 — Automated Full Sequence
+### Option 9 — Automated Bulk Sequence (SYNC_BATCH)
 
-Runs all 4 sync actions in sequence with default test data, waiting 8 seconds between steps to avoid nonce collisions:
+Loads all employees from `tests/mock-employees.json` and processes them in a **single batched transaction** using the `SYNC_BATCH` action type.
 
-```
-1/4  SYNC_KYC (employeeAddress=0x1111...)
-2/4  SYNC_EMPLOYMENT_STATUS (employed=true)
-3/4  SYNC_GOAL (goalId=0x000...001, achieved=true)
-4/4  SYNC_FREEZE_WALLET (frozen=false — clean state)
-```
+**Flow:**
+1. Reads `mock-employees.json` (20 employees by default).
+2. Persists all employees to DynamoDB via `CompanyEmployeeBatchInput` Lambda action.
+3. Builds a `SYNC_BATCH` CRE payload containing all sync actions (KYC, Employment, Goal, Freeze, Grant) for every employee.
+4. Submits the entire batch as **one CRE `writeReport` transaction** on-chain.
 
-Prints a final summary table with ✓/✗ per step.
+**Gas savings:** By bundling ~80+ individual actions into a single transaction, the base transaction overhead (21,000 gas) is paid only once instead of per-action, reducing total gas cost by ~95% in overhead fees.
+
+> **Note:** Step 4 (CRE LogTrigger) is skipped for `SYNC_BATCH` since multiple events are emitted. Individual log triggers can be tested via Options 1–4.
 
 ---
 
@@ -290,7 +291,7 @@ Prints a final summary table with ✓/✗ per step.
 
 ## Useful Basescan Links
 
-- [EquityWorkflowReceiver](https://sepolia.basescan.org/address/0x69d2FEb2299424f9c6a14fc2D87d9B3f7F819165)
-- [IdentityRegistry](https://sepolia.basescan.org/address/0x66f6ae7Dc6f48f9c62360d5dFaf1883841Fc9cce)
-- [EmployeeVesting](https://sepolia.basescan.org/address/0x96f559Be216Af03CB9bFe42A6E84c8B41841b386)
-- [Token (EQT)](https://sepolia.basescan.org/address/0x8a6aea980aa058ba27ba395ea550413c776792f9)
+- [EquityWorkflowReceiver](https://sepolia.basescan.org/address/0x1a8d23329cf8641c6645b15Da2896Bd307b56B4a)
+- [IdentityRegistry](https://sepolia.basescan.org/address/0x1Ee184656d3E440c04bB874FDBdDA8Ba07F3E1A6)
+- [EmployeeVesting](https://sepolia.basescan.org/address/0xe875A81E95c276816e877dDC03A153465d0D9999)
+- [Token (EQT)](https://sepolia.basescan.org/address/0xB4FE5972D8cD70494DE061471bb59BAC6F7c3c4F)
