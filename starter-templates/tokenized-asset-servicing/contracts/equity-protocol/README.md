@@ -10,22 +10,47 @@ Below is the architecture and flow diagram of the protocol's contracts:
 
 ![Solidity Architecture](../../equity_solidity_architecture.svg)
 
+## Deployed Contracts (Base Sepolia Testnet)
+
+| Contract | Address |
+|---|---|
+| `EquityWorkflowReceiver` | `0x69d2FEb2299424f9c6a14fc2D87d9B3f7F819165` |
+| `IdentityRegistry` | `0x66f6ae7Dc6f48f9c62360d5dFaf1883841Fc9cce` |
+| `EmployeeVesting` | `0x96f559Be216Af03CB9bFe42A6E84c8B41841b386` |
+| `Token` (ERC-3643 `EQT`) | `0x8a6aea980aa058ba27ba395ea550413c776792f9` |
+
+> **Ownership model**: Ownership of `IdentityRegistry` and `Token` has been transferred to `EquityWorkflowReceiver`. `EquityWorkflowReceiver` is also registered as an oracle in `EmployeeVesting`. This means all state changes flow exclusively through CRE-verified reports.
+
+> **Chainlink Forwarder (Base Sepolia)**: `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`
+
 ## Main Components
 
 ### 1. ERC-3643 Token (`Token.sol` & `IERC3643.sol`)
 The core of the tokenized asset. It implements the ERC-3643 standard (with backward compatibility to ERC-20 interfaces), designed or adapted to handle financial assets and security tokens. This contract ensures close interaction with the identity registry system and compliance rules before allowing transfers.
 
+Key operations routed through CRE:
+- `setAddressFrozen(address, bool)` — called by `SYNC_FREEZE_WALLET`
+
 ### 2. Identity Management (`IdentityRegistry.sol` & `IIdentityRegistry.sol`)
 Manages the credentials and KYC/AML verification status of the different addresses (wallets) in the ecosystem. A user can only receive or operate with tokens if they maintain a valid status within this registry.
 
+Key operations routed through CRE:
+- `registerIdentity(address, address, uint16)` — called by `SYNC_KYC` when `verified=true` and identity not yet registered
+- `deleteIdentity(address)` — called by `SYNC_KYC` when `verified=false`
+- `setCountry(address, uint16)` — called by `SYNC_KYC` when identity already registered and country changes
+
 ### 3. Compliance Rules (`Compliance.sol` & `ICompliance.sol`)
-Acts as a plug-and-play module that validates whether a transfer complies with regulations (e.g., holding limits, transfer blocks between certain countries, or frozen wallet controls).
+Acts as a plug-and-play module that validates whether a transfer complies with regulations (e.g., holding limits, transfer blocks between certain countries, or frozen wallet controls). The Token contract is bound to `Compliance` via `bindToken()` during deployment.
 
 ### 4. Employee Vesting (`EmployeeVesting.sol`)
 A specialized contract for the creation and administration of contractual plans (*grants*) for employees. It includes:
 - **Cliff periods** and linear *Vesting* duration.
 - **Revocable Grants**: allowing compensation schemes to be frozen if the employment relationship is terminated.
 - **Performance Goals**: vesting can depend on meeting business metrics that are validated through oracles.
+
+Key operations routed through CRE:
+- `updateEmploymentStatus(address, bool)` — called by `SYNC_EMPLOYMENT_STATUS`
+- `setGoalAchieved(bytes32, bool)` — called by `SYNC_GOAL`
 
 ### 5. Smart Chain Workflow (`EquityWorkflowReceiver.sol`)
 The bridge contract that receives reports calculated by Chainlink CRE. It translates payloads created off-chain into on-chain state updates by processing multiple types of actions, such as:
@@ -37,3 +62,13 @@ The bridge contract that receives reports calculated by Chainlink CRE. It transl
 ## Chainlink CRE Integration
 
 `EquityWorkflowReceiver.sol` inherits from a receiver oracle template (`ReceiverTemplate.sol`), ensuring that real-world events are securely cross-communicated cryptographically to the settlement layer on the blockchain, bridging the gap between human capital / business metrics (Web2) and Web3 infrastructure.
+
+### CRE Log Trigger Mapping (main.ts)
+
+| Trigger Index | Contract | Events Forwarded to Lambda |
+|---|---|---|
+| 0 | HTTP (send to blockchain) | — |
+| 1 | `IdentityRegistry` | `IdentityRegistered`, `IdentityRemoved`, `CountryUpdated` |
+| 2 | `EmployeeVesting` | `GrantCreated`, `TokensClaimed`, `EmploymentStatusUpdated`, `GoalUpdated`, `GrantRevoked` |
+
+> **Note:** `Token` (`AddressFrozen`) events are **not** watched by any log trigger in the current `main.ts`. The `SYNC_FREEZE_WALLET` action writes state to the blockchain, but the log-trigger step (Step 4) is skipped. On-chain state can be verified directly via `Token.isFrozen(address)`.
