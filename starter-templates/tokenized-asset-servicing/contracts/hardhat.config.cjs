@@ -8,7 +8,7 @@ module.exports = {
   solidity: "0.8.20",
   networks: {
     baseSepolia: {
-      url: "https://base-sepolia.gateway.tenderly.co/3qeYD3iE02OOzPOCANms01",
+      url: "https://virtual.base-sepolia.eu.rpc.tenderly.co/1b0d992e-47cd-4c87-ab28-359ec4147c3a",
       accounts: process.env.CRE_ETH_PRIVATE_KEY ? [process.env.CRE_ETH_PRIVATE_KEY] : [],
     },
   },
