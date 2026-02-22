@@ -67,11 +67,25 @@ const syncFreezeWalletSchema = z.object({
   frozen: z.boolean(),
 });
 
+// SYNC_CREATE_GRANT: creates an on-chain vesting grant via CRE.
+// Requires EmployeeVesting to be pre-funded via fundVesting() first.
+const syncCreateGrantSchema = z.object({
+  action: z.literal("SYNC_CREATE_GRANT"),
+  employeeAddress: addressSchema,
+  amount: z.coerce.bigint().positive(),            // token amount (wei / smallest unit)
+  startTime: z.coerce.number().int().positive(),   // unix timestamp
+  cliffDuration: z.coerce.number().int().min(0),   // seconds
+  vestingDuration: z.coerce.number().int().positive(), // seconds
+  isRevocable: z.boolean(),
+  performanceGoalId: bytes32Schema.optional(),     // 0x000...0 = no condition
+});
+
 const syncInputSchema = z.discriminatedUnion("action", [
   syncKycSchema,
   syncEmploymentSchema,
   syncGoalSchema,
   syncFreezeWalletSchema,
+  syncCreateGrantSchema,
 ]);
 
 type SyncInput = z.infer<typeof syncInputSchema>;
@@ -85,6 +99,7 @@ const ACTION_TYPE = {
   SYNC_EMPLOYMENT_STATUS: 1,
   SYNC_GOAL: 2,
   SYNC_FREEZE_WALLET: 3,
+  SYNC_CREATE_GRANT: 4,
 } as const;
 
 const safeJsonStringify = (obj: unknown): string =>
@@ -179,6 +194,30 @@ const buildInstruction = (input: SyncInput): { actionType: number; payload: `0x$
 
       return {
         actionType: ACTION_TYPE.SYNC_FREEZE_WALLET,
+        payload,
+      };
+    }
+    case "SYNC_CREATE_GRANT": {
+      const ZERO_GOAL = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
+      const performanceGoalId = (input.performanceGoalId ?? ZERO_GOAL) as `0x${string}`;
+
+      const payload = encodeAbiParameters(
+        parseAbiParameters(
+          "address employee, uint256 amount, uint256 startTime, uint256 cliffDuration, uint256 vestingDuration, bool isRevocable, bytes32 performanceGoalId"
+        ),
+        [
+          getAddress(input.employeeAddress),
+          input.amount,
+          BigInt(input.startTime),
+          BigInt(input.cliffDuration),
+          BigInt(input.vestingDuration),
+          input.isRevocable,
+          performanceGoalId,
+        ],
+      );
+
+      return {
+        actionType: ACTION_TYPE.SYNC_CREATE_GRANT,
         payload,
       };
     }
