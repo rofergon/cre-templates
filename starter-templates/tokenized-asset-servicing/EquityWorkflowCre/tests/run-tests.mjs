@@ -376,6 +376,10 @@ const verifyOnChain = async (action, payload) => {
                 return null;
             }
         }
+        case "SYNC_BATCH": {
+            console.log("   ℹ Skipping detailed verification for SYNC_BATCH.");
+            break;
+        }
     }
 };
 
@@ -462,6 +466,9 @@ const executeFullFlow = async (lambdaPayload, crePayload) => {
         console.log("   ℹ Token (AddressFrozen) events are not watched by main.ts.");
         console.log("   ℹ Trigger 1 = IdentityRegistry, Trigger 2 = EmployeeVesting only.");
         console.log("   ℹ On-chain state was verified directly above (Step 3b).");
+    } else if (action === "SYNC_BATCH") {
+        console.log("\n┌─ Step 4: CRE LogTrigger ── SKIPPED ─────────────────────");
+        console.log("   ℹ SYNC_BATCH emits many events; log triggers would need to be tested individually.");
     } else if (eventLogIdx === -1) {
         console.log("\n┌─ Step 4: CRE LogTrigger ── SKIPPED ─────────────────────");
         console.log("   ⚠ No watched contract event found in this tx. Skipping LogTrigger.");
@@ -820,105 +827,87 @@ const handleCreateVestingGrant = async () => {
     await executeFullFlow(lambdaPayload, crePayload);
 };
 
-const handleFullSequence = async () => {
-    console.log("\n── Automated Full Sequence: KYC → Employment → Goal → Freeze ─\n");
-    console.log("   Runs all 4 sync actions with default test data.\n");
+const handleBulkSequence = async () => {
+    console.log("\n── Automated Bulk Sequence: 20 Employees ───────────────────\n");
 
-    const employeeAddress = "0x1111111111111111111111111111111111111111";
-    const identityAddress = "0x2222222222222222222222222222222222222222";
-    const goalId = "0x0000000000000000000000000000000000000000000000000000000000000001";
-    const country = 840;
+    const mockFilePath = resolve(workflowDir, "tests", "mock-employees.json");
+    if (!existsSync(mockFilePath)) {
+        console.log(`   ✗ File not found: ${mockFilePath}`);
+        return;
+    }
+    const employees = JSON.parse(readFileSync(mockFilePath, "utf-8"));
 
-    const sequence = [
-        {
-            label: "1/4 SYNC_KYC — Register identity on-chain",
-            lambdaPayload: {
-                action: "CompanyEmployeeInput",
-                employeeAddress,
-                identityAddress,
-                country,
-                kycVerified: true,
-                employed: true,
-            },
-            crePayload: {
+    const lambdaPayload = {
+        action: "CompanyEmployeeBatchInput",
+        employees: employees
+    };
+
+    const batches = [];
+    for (const emp of employees) {
+        if (emp.kycVerified !== undefined || emp.identityAddress || emp.country) {
+            batches.push({
                 action: "SYNC_KYC",
-                employeeAddress,
-                verified: true,
-                identityAddress,
-                country,
-            },
-        },
-        {
-            label: "2/4 SYNC_EMPLOYMENT_STATUS — Set employee as active",
-            lambdaPayload: {
-                action: "CompanyEmployeeInput",
-                employeeAddress,
-                employed: true,
-            },
-            crePayload: {
+                employeeAddress: emp.employeeAddress,
+                verified: !!emp.kycVerified,
+                identityAddress: emp.kycVerified ? emp.identityAddress : undefined,
+                country: emp.country ?? 0
+            });
+        }
+
+        if (emp.employed !== undefined) {
+            batches.push({
                 action: "SYNC_EMPLOYMENT_STATUS",
-                employeeAddress,
-                employed: true,
-            },
-        },
-        {
-            label: "3/4 SYNC_GOAL — Mark performance goal as achieved",
-            lambdaPayload: {
-                action: "CompanyEmployeeInput",
-                employeeAddress: "0x0000000000000000000000000000000000000001",
-                goalId,
-                goalAchieved: true,
-            },
-            crePayload: {
+                employeeAddress: emp.employeeAddress,
+                employed: !!emp.employed
+            });
+        }
+
+        if (emp.goalId && emp.goalAchieved !== undefined) {
+            batches.push({
                 action: "SYNC_GOAL",
-                goalId,
-                achieved: true,
-            },
-        },
-        {
-            label: "4/4 SYNC_FREEZE_WALLET — Freeze (then we unfreeze for cleanup)",
-            lambdaPayload: {
-                action: "CompanyEmployeeInput",
-                employeeAddress,
-                walletFrozen: false,
-            },
-            crePayload: {
+                goalId: emp.goalId,
+                achieved: !!emp.goalAchieved
+            });
+        }
+
+        if (emp.walletFrozen !== undefined) {
+            batches.push({
                 action: "SYNC_FREEZE_WALLET",
-                walletAddress: employeeAddress,
-                frozen: false,
-            },
-        },
-    ];
-
-    const results = [];
-
-    for (const step of sequence) {
-        console.log(`\n${"═".repeat(66)}`);
-        console.log(`  ${step.label}`);
-        console.log("═".repeat(66));
-
-        try {
-            await executeFullFlow(step.lambdaPayload, step.crePayload);
-            results.push({ step: step.label, status: "✓ OK" });
-        } catch (err) {
-            console.error(`\n   ✗ Failed: ${err.message}`);
-            results.push({ step: step.label, status: `✗ FAILED: ${err.message.split("\n")[0]}` });
+                walletAddress: emp.employeeAddress,
+                frozen: !!emp.walletFrozen
+            });
         }
 
-        // Brief pause between steps to avoid nonce collision
-        if (sequence.indexOf(step) < sequence.length - 1) {
-            console.log("\n   Waiting 8s before next step...");
-            await wait(8000);
+        if (emp.grant) {
+            batches.push({
+                action: "SYNC_CREATE_GRANT",
+                employeeAddress: emp.employeeAddress,
+                amount: BigInt(emp.grant.amount).toString(),
+                startTime: Math.floor(Date.now() / 1000),
+                cliffDuration: emp.grant.cliffMonths * 30 * 24 * 3600,
+                vestingDuration: emp.grant.vestingMonths * 30 * 24 * 3600,
+                isRevocable: !!emp.grant.isRevocable,
+                performanceGoalId: emp.goalId || ("0x" + "0".repeat(64))
+            });
         }
     }
 
-    console.log("\n╔══════════════════════════════════════════════════════════════╗");
-    console.log("║                 Full Sequence — Summary                      ║");
-    console.log("╚══════════════════════════════════════════════════════════════╝\n");
-    for (const r of results) {
-        console.log(`  ${r.status.startsWith("✓") ? "✓" : "✗"}  ${r.step.padEnd(55)} ${r.status.includes("OK") ? "" : r.status}`);
+    const crePayload = {
+        action: "SYNC_BATCH",
+        batches: batches
+    };
+
+    console.log(`   Loaded ${employees.length} employees from mock-employees.json`);
+    console.log(`   Prepared batch with ${batches.length} sync actions.`);
+
+    const confirm = await askYesNo("\n   Proceed with batch upload?", true);
+    if (!confirm) { console.log("   Cancelled.\n"); return; }
+
+    try {
+        await executeFullFlow(lambdaPayload, crePayload);
+    } catch (err) {
+        console.error(`\n   ✗ Failed: ${err.message}`);
     }
-    console.log();
 };
 
 // ---------------------------------------------------------------------------
@@ -965,7 +954,7 @@ const showMenu = () => {
     console.log();
     console.log("  ─── ADVANCED ────────────────────────────────────────────────");
     console.log("  8) Create Vesting Grant Metadata (Lambda persist)");
-    console.log("  9) Automated Full Sequence (KYC → Employment → Goal → Freeze)");
+    console.log("  9) Automated Bulk Sequence (Uses mock-employees.json, SYNC_BATCH)");
     console.log();
     console.log("  0) Exit");
     console.log();
@@ -995,7 +984,7 @@ const main = async () => {
                 case "6": await handleReadEmployee(); break;
                 case "7": await handleListEmployees(); break;
                 case "8": await handleCreateVestingGrant(); break;
-                case "9": await handleFullSequence(); break;
+                case "9": await handleBulkSequence(); break;
                 case "0":
                     console.log("   Goodbye!\n");
                     running = false;
