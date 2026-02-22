@@ -17,6 +17,7 @@ const REQUIRED_FIELDS = {
   readEmployee: ["employeeAddress"],
   listEmployees: [],
   CompanyEmployeeInput: ["employeeAddress"],
+  CompanyEmployeeBatchInput: ["employees"],
   ManualSyncToCre: ["apiUrl", "payload"],
   IdentityRegistered: ["employeeAddress", "identityAddress", "country"],
   IdentityRemoved: ["employeeAddress"],
@@ -279,6 +280,55 @@ const handlers = {
       syncTriggered: syncResponses.length,
       syncResponses,
       data: employeeState,
+    };
+  },
+
+  CompanyEmployeeBatchInput: async (client, { employees, apiUrl }) => {
+    const now = new Date().toISOString();
+    const allSyncPayloads = [];
+    const results = [];
+
+    for (const params of employees) {
+      const normalizedEmployeeAddress = normalizeAddress(params.employeeAddress);
+      const recordId = employeeRecordId(normalizedEmployeeAddress);
+      const patch = pickCompanyPatch(params);
+
+      const employeeState = await upsertRecord(client, recordId, {
+        ...patch,
+        employeeAddress: normalizedEmployeeAddress,
+        entityType: "employee",
+        lastCompanyUpdateAt: now,
+        source: "company",
+      });
+
+      if (apiUrl) {
+        const payloads = buildSyncPayloadsFromCompanyInput(params, employeeState);
+        allSyncPayloads.push(...payloads);
+      }
+
+      results.push({ recordId, data: employeeState });
+    }
+
+    let syncResponse = null;
+    if (apiUrl && allSyncPayloads.length > 0) {
+      const batchPayload = {
+        action: "SYNC_BATCH",
+        batches: allSyncPayloads,
+      };
+      const response = await postJson(apiUrl, batchPayload);
+      syncResponse = {
+        action: "SYNC_BATCH",
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      };
+    }
+
+    return {
+      message: "Batch company input persisted",
+      processedCount: results.length,
+      syncTriggered: allSyncPayloads.length > 0 ? 1 : 0,
+      syncResponse,
+      data: results,
     };
   },
 
