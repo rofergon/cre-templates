@@ -61,7 +61,7 @@ if (!lambdaUrl) {
 
 const rpcUrl =
     process.env.BASE_SEPOLIA_RPC_URL ||
-    "https://base-sepolia.gateway.tenderly.co/3qeYD3iE02OOzPOCANms01/";
+    "https://virtual.base-sepolia.eu.rpc.tenderly.co/1b0d992e-47cd-4c87-ab28-359ec4147c3a";
 
 const identityRegistryAddress = config.evms[0].identityRegistryAddress.toLowerCase();
 const employeeVestingAddress = config.evms[0].employeeVestingAddress.toLowerCase();
