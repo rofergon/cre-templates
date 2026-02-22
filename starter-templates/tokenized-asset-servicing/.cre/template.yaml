@@ -1,18 +1,26 @@
 kind: starter-template
 id: tokenized-asset-servicing-ts
 projectDir: .
-title: "Tokenized Asset Servicing (TypeScript)"
-description: "Off-chain data orchestration for tokenized real-world assets using LogTrigger and HTTP capabilities."
+title: "Tokenized Asset Servicing — Equity Protocol (TypeScript)"
+description: "Bidirectional off-chain/on-chain orchestration for tokenized equity assets. Uses CRE HTTP triggers to write ERC-3643 compliance, KYC, employment, vesting grants, and wallet-freeze state to Base Sepolia via EquityWorkflowReceiver. Supports SYNC_BATCH for bulk employee processing in a single transaction. EVM LogTriggers relay on-chain events back to AWS Lambda/DynamoDB."
 language: typescript
 category: capital-markets
 tags:
   - rwa
   - tokenization
+  - erc-3643
   - log-trigger
   - http
   - aws-lambda
   - dynamodb
+  - solidity
+  - base-sepolia
+  - batch-processing
 workflows:
-  - dir: asset-log-trigger-workflow
+  - dir: EquityWorkflowCre
 postInit: |
-  Deploy the AWS Lambda function and contracts before running. See README.md for details.
+  1. Copy .env.example to .env and set CRE_ETH_PRIVATE_KEY and LAMBDA_URL.
+  2. Deploy contracts: cd contracts && npx hardhat run scripts/deploy_equity_new.cjs --network baseSepolia
+  3. Update EquityWorkflowCre/config.staging.json with the deployed addresses.
+  4. Deploy the AWS Lambda function (lambda-function/).
+  5. Run: cd EquityWorkflowCre && node tests/run-tests.mjs
