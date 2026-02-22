@@ -23,7 +23,7 @@
 
   <!-- Title Section -->
   <text x="500" y="50" font-size="28" font-weight="bold" fill="#1e293b" text-anchor="middle">Chainlink CRE: Internal Workflow Logic</text>
-  <text x="500" y="80" font-size="14" fill="#64748b" text-anchor="middle">Execution flow for `main.ts` (Synchronization &amp; Consensus)</text>
+  <text x="500" y="80" font-size="14" fill="#64748b" text-anchor="middle">Execution flow for main.ts — 5 ActionTypes (v2: incl. SYNC_CREATE_GRANT)</text>
 
   <!-- Main CRE Container -->
   <rect x="80" y="120" width="840" height="520" rx="16" fill="#ffffff" stroke="#2a5ada" stroke-width="3" filter="url(#shadow-md)"/>
@@ -64,9 +64,10 @@
   <text x="500" y="295" font-size="14" font-weight="bold" fill="#334155" text-anchor="middle">Zod Parsing &amp; Validation</text>
 
   <!-- Instruction Builder -->
-  <rect x="390" y="350" width="220" height="50" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1" filter="url(#shadow-sm)"/>
+  <rect x="390" y="350" width="220" height="60" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1" filter="url(#shadow-sm)"/>
   <text x="500" y="370" font-size="14" font-weight="bold" fill="#334155" text-anchor="middle">Build Transaction Instruction</text>
   <text x="500" y="388" font-size="12" fill="#64748b" text-anchor="middle">(Viem: encodeAbiParameters)</text>
+  <text x="500" y="402" font-size="9" fill="#8b5cf6" text-anchor="middle">KYC(0) EMP(1) GOAL(2) FREEZE(3) GRANT(4)</text>
 
   <!-- Decentralized Consensus Module -->
   <rect x="375" y="460" width="250" height="90" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="2" filter="url(#shadow-sm)"/>
@@ -84,7 +85,7 @@
   <rect x="700" y="340" width="180" height="80" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
   <text x="790" y="370" font-size="14" font-weight="bold" fill="#1d4ed8" text-anchor="middle">EVM Client Capability</text>
   <text x="790" y="390" font-size="12" fill="#1e3a8a" text-anchor="middle">Executes `writeReport()`</text>
-  <text x="790" y="405" font-size="10" fill="#2563eb" text-anchor="middle">(Dest: Receiever.sol)</text>
+  <text x="790" y="405" font-size="10" fill="#2563eb" text-anchor="middle">(Dest: Receiver.sol)</text>
 
   <!-- HTTP Call Action (Bottom Right Reverse flow) -->
   <rect x="700" y="500" width="180" height="80" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
