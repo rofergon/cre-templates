@@ -14,10 +14,10 @@ Below is the architecture and flow diagram of the protocol's contracts:
 
 | Contract | Address |
 |---|---|
-| `EquityWorkflowReceiver` | `0x69d2FEb2299424f9c6a14fc2D87d9B3f7F819165` |
-| `IdentityRegistry` | `0x66f6ae7Dc6f48f9c62360d5dFaf1883841Fc9cce` |
-| `EmployeeVesting` | `0x96f559Be216Af03CB9bFe42A6E84c8B41841b386` |
-| `Token` (ERC-3643 `EQT`) | `0x8a6aea980aa058ba27ba395ea550413c776792f9` |
+| `EquityWorkflowReceiver` | `0x1a8d23329cf8641c6645b15Da2896Bd307b56B4a` |
+| `IdentityRegistry` | `0x1Ee184656d3E440c04bB874FDBdDA8Ba07F3E1A6` |
+| `EmployeeVesting` | `0xe875A81E95c276816e877dDC03A153465d0D9999` |
+| `Token` (ERC-3643 `EQT`) | `0xB4FE5972D8cD70494DE061471bb59BAC6F7c3c4F` |
 
 > **Ownership model**: Ownership of `IdentityRegistry` and `Token` has been transferred to `EquityWorkflowReceiver`. `EquityWorkflowReceiver` is also registered as an oracle in `EmployeeVesting`. This means all state changes flow exclusively through CRE-verified reports.
 
@@ -54,10 +54,12 @@ Key operations routed through CRE:
 
 ### 5. Smart Chain Workflow (`EquityWorkflowReceiver.sol`)
 The bridge contract that receives reports calculated by Chainlink CRE. It translates payloads created off-chain into on-chain state updates by processing multiple types of actions, such as:
-- `SYNC_KYC`: Synchronizes user verification information with the `IdentityRegistry`.
-- `SYNC_EMPLOYMENT_STATUS`: Modifies an employee's employment status in `EmployeeVesting`.
-- `SYNC_GOAL`: Reports the fulfillment (or non-fulfillment) of performance goals by connecting to `EmployeeVesting`.
-- `SYNC_FREEZE_WALLET`: Allows entire accounts to be frozen in case of emergencies, updating the policies in `Token`.
+- `SYNC_KYC` (0): Synchronizes user verification information with the `IdentityRegistry`.
+- `SYNC_EMPLOYMENT_STATUS` (1): Modifies an employee's employment status in `EmployeeVesting`.
+- `SYNC_GOAL` (2): Reports the fulfillment (or non-fulfillment) of performance goals by connecting to `EmployeeVesting`.
+- `SYNC_FREEZE_WALLET` (3): Allows entire accounts to be frozen in case of emergencies, updating the policies in `Token`.
+- `SYNC_CREATE_GRANT` (4): Creates on-chain vesting grants via `EmployeeVesting`.
+- `SYNC_BATCH` (5): Accepts a `bytes[]` array of nested action payloads and processes them recursively in a single transaction. This enables bulk processing of multiple employees/actions, reducing gas overhead by ~95%.
 
 ## Chainlink CRE Integration
 
