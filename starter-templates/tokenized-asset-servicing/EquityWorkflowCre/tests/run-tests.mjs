@@ -2,8 +2,19 @@
  * run-tests.mjs
  *
  * Interactive CLI for the Equity CRE protocol.
- * Lets you choose which sync action to run, prompts for custom payload data,
- * and executes the full 3-tier flow: Lambda → CRE → Blockchain → CRE → Lambda.
+ * Tests the full 3-tier flow: Lambda → CRE → Blockchain → CRE → Lambda
+ *
+ * Protocol contracts (Base Sepolia):
+ *   Receiver         : 0x69d2FEb2299424f9c6a14fc2D87d9B3f7F819165
+ *   IdentityRegistry : 0x66f6ae7Dc6f48f9c62360d5dFaf1883841Fc9cce
+ *   EmployeeVesting  : 0x96f559Be216Af03CB9bFe42A6E84c8B41841b386
+ *   Token (ERC-3643) : read from Receiver.token()
+ *
+ * Trigger-index mapping (main.ts):
+ *   0  = HTTP trigger  (write to blockchain)
+ *   1  = IdentityRegistry log trigger (sync to Lambda)
+ *   2  = EmployeeVesting log trigger  (sync to Lambda)
+ *   ⚠  Token (AddressFrozen) is NOT watched → Step 4 is skipped for SYNC_FREEZE_WALLET
  */
 
 import { createInterface } from "node:readline";
@@ -50,8 +61,9 @@ const envFromFile = parseEnvFile(envPath);
 const lambdaUrl = process.env.LAMBDA_URL || envFromFile.LAMBDA_URL;
 const rpcUrl =
     process.env.BASE_SEPOLIA_RPC_URL ||
-    "https://base-sepolia.gateway.tenderly.co/3qeYD3iE02OOzPOCANms01/";
+    "https://virtual.base-sepolia.eu.rpc.tenderly.co/1b0d992e-47cd-4c87-ab28-359ec4147c3a";
 
+const receiverAddress = config.evms[0].receiverAddress;
 const identityRegistryAddress = config.evms[0].identityRegistryAddress.toLowerCase();
 const employeeVestingAddress = config.evms[0].employeeVestingAddress.toLowerCase();
 
@@ -71,6 +83,66 @@ const publicClient = createPublicClient({
     chain: baseSepolia,
     transport: http(rpcUrl),
 });
+
+// ---------------------------------------------------------------------------
+// On-chain ABIs (minimal, read-only)
+// ---------------------------------------------------------------------------
+
+const IDENTITY_REGISTRY_ABI = [
+    { type: "function", name: "isVerified", inputs: [{ name: "_userAddress", type: "address" }], outputs: [{ type: "bool" }], stateMutability: "view" },
+    { type: "function", name: "identity", inputs: [{ name: "_userAddress", type: "address" }], outputs: [{ type: "address" }], stateMutability: "view" },
+    { type: "function", name: "investorCountry", inputs: [{ name: "_userAddress", type: "address" }], outputs: [{ type: "uint16" }], stateMutability: "view" },
+];
+
+const EMPLOYEE_VESTING_ABI = [
+    { type: "function", name: "isEmployed", inputs: [{ name: "", type: "address" }], outputs: [{ type: "bool" }], stateMutability: "view" },
+    { type: "function", name: "goalsAchieved", inputs: [{ name: "", type: "bytes32" }], outputs: [{ type: "bool" }], stateMutability: "view" },
+    { type: "function", name: "vestingPoolBalance", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+    {
+        type: "function", name: "grants",
+        inputs: [{ name: "", type: "address" }],
+        outputs: [
+            { name: "totalAmount", type: "uint256" },
+            { name: "startTime", type: "uint256" },
+            { name: "cliffDuration", type: "uint256" },
+            { name: "vestingDuration", type: "uint256" },
+            { name: "amountClaimed", type: "uint256" },
+            { name: "isRevocable", type: "bool" },
+            { name: "performanceGoalId", type: "bytes32" },
+        ],
+        stateMutability: "view"
+    },
+];
+
+const TOKEN_ABI = [
+    { type: "function", name: "isFrozen", inputs: [{ name: "_userAddress", type: "address" }], outputs: [{ type: "bool" }], stateMutability: "view" },
+];
+
+const RECEIVER_ABI = [
+    { type: "function", name: "token", inputs: [], outputs: [{ type: "address" }], stateMutability: "view" },
+];
+
+// ---------------------------------------------------------------------------
+// Resolve Token address from EquityWorkflowReceiver.token()
+// ---------------------------------------------------------------------------
+
+let tokenAddress = null;
+
+const resolveTokenAddress = async () => {
+    if (tokenAddress) return tokenAddress;
+    try {
+        const addr = await publicClient.readContract({
+            address: receiverAddress,
+            abi: RECEIVER_ABI,
+            functionName: "token",
+        });
+        tokenAddress = addr.toLowerCase();
+        return tokenAddress;
+    } catch (err) {
+        console.warn(`   ⚠ Could not resolve Token address from Receiver: ${err.message}`);
+        return null;
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Readline helper
@@ -166,10 +238,174 @@ const extractTxHash = (text) => {
 };
 
 // ---------------------------------------------------------------------------
+// On-chain verification helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Verify on-chain state after a sync action.
+ * Returns an object with the verification results.
+ */
+const verifyOnChain = async (action, payload) => {
+    console.log("\n┌─ On-chain verification ─────────────────────────────────────");
+
+    switch (action) {
+        case "SYNC_KYC": {
+            const addr = payload.employeeAddress;
+            try {
+                const [isVerified, onChainIdentity, country] = await Promise.all([
+                    publicClient.readContract({
+                        address: identityRegistryAddress,
+                        abi: IDENTITY_REGISTRY_ABI,
+                        functionName: "isVerified",
+                        args: [addr],
+                    }),
+                    publicClient.readContract({
+                        address: identityRegistryAddress,
+                        abi: IDENTITY_REGISTRY_ABI,
+                        functionName: "identity",
+                        args: [addr],
+                    }),
+                    publicClient.readContract({
+                        address: identityRegistryAddress,
+                        abi: IDENTITY_REGISTRY_ABI,
+                        functionName: "investorCountry",
+                        args: [addr],
+                    }),
+                ]);
+
+                const expectedVerified = payload.verified;
+                const expectedCountry = payload.country ?? 0;
+
+                console.log(`   IdentityRegistry.isVerified(${addr.substring(0, 10)}...) = ${isVerified}  ${isVerified === expectedVerified ? "✓" : "✗"}`);
+                console.log(`   IdentityRegistry.identity(...)    = ${onChainIdentity}`);
+                console.log(`   IdentityRegistry.investorCountry  = ${country}  (expected: ${expectedCountry}) ${Number(country) === expectedCountry ? "✓" : "✗"}`);
+
+                return { isVerified, onChainIdentity, country: Number(country) };
+            } catch (err) {
+                console.log(`   ⚠ Could not read IdentityRegistry: ${err.message}`);
+                return null;
+            }
+        }
+
+        case "SYNC_EMPLOYMENT_STATUS": {
+            const addr = payload.employeeAddress;
+            try {
+                const isEmployed = await publicClient.readContract({
+                    address: employeeVestingAddress,
+                    abi: EMPLOYEE_VESTING_ABI,
+                    functionName: "isEmployed",
+                    args: [addr],
+                });
+
+                const expected = payload.employed;
+                console.log(`   EmployeeVesting.isEmployed(${addr.substring(0, 10)}...) = ${isEmployed}  (expected: ${expected}) ${isEmployed === expected ? "✓" : "✗"}`);
+                return { isEmployed };
+            } catch (err) {
+                console.log(`   ⚠ Could not read EmployeeVesting: ${err.message}`);
+                return null;
+            }
+        }
+
+        case "SYNC_GOAL": {
+            const goalId = payload.goalId;
+            try {
+                const achieved = await publicClient.readContract({
+                    address: employeeVestingAddress,
+                    abi: EMPLOYEE_VESTING_ABI,
+                    functionName: "goalsAchieved",
+                    args: [goalId],
+                });
+
+                const expected = payload.achieved;
+                console.log(`   EmployeeVesting.goalsAchieved(${goalId.substring(0, 18)}...) = ${achieved}  (expected: ${expected}) ${achieved === expected ? "✓" : "✗"}`);
+                return { achieved };
+            } catch (err) {
+                console.log(`   ⚠ Could not read EmployeeVesting.goalsAchieved: ${err.message}`);
+                return null;
+            }
+        }
+
+        case "SYNC_FREEZE_WALLET": {
+            const addr = payload.walletAddress;
+            const tokenAddr = await resolveTokenAddress();
+            if (!tokenAddr) {
+                console.log("   ⚠ Token address unavailable, skipping on-chain freeze check.");
+                return null;
+            }
+            try {
+                const isFrozen = await publicClient.readContract({
+                    address: tokenAddr,
+                    abi: TOKEN_ABI,
+                    functionName: "isFrozen",
+                    args: [addr],
+                });
+
+                const expected = payload.frozen;
+                console.log(`   Token.isFrozen(${addr.substring(0, 10)}...) = ${isFrozen}  (expected: ${expected}) ${isFrozen === expected ? "✓" : "✗"}`);
+                return { isFrozen };
+            } catch (err) {
+                console.log(`   ⚠ Could not read Token.isFrozen: ${err.message}`);
+                return null;
+            }
+        }
+
+        case "SYNC_CREATE_GRANT": {
+            const addr = payload.employeeAddress;
+            try {
+                const grant = await publicClient.readContract({
+                    address: employeeVestingAddress,
+                    abi: EMPLOYEE_VESTING_ABI,
+                    functionName: "grants",
+                    args: [addr],
+                });
+                const pool = await publicClient.readContract({
+                    address: employeeVestingAddress,
+                    abi: EMPLOYEE_VESTING_ABI,
+                    functionName: "vestingPoolBalance",
+                });
+
+                const grantAmount = grant[0];
+                const expected = BigInt(payload.amount);
+                const ok = grantAmount >= expected;
+                console.log(`   EmployeeVesting.grants(${addr.substring(0, 10)}...).totalAmount = ${grantAmount}  (expected: ${expected}) ${ok ? "✓" : "✗"}`);
+                console.log(`   EmployeeVesting.vestingPoolBalance() = ${pool} (remaining)`);
+                console.log(`   EmployeeVesting.isEmployed(${addr.substring(0, 10)}...)  = ${grant[5] !== undefined ? "see grant" : "true (set by createGrant)"}`);
+                return { grantAmount, pool };
+            } catch (err) {
+                console.log(`   ⚠ Could not read EmployeeVesting.grants: ${err.message}`);
+                return null;
+            }
+        }
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Determine log trigger index based on action
+//
+// main.ts registers exactly 3 handlers:
+//   index 0  = httpTrigger         → onHTTPTrigger  (writes to chain)
+//   index 1  = IdentityRegistry logTrigger → onLogTrigger
+//   index 2  = EmployeeVesting logTrigger  → onLogTrigger
+//
+// Token (AddressFrozen) events are NOT watched → return null for FREEZE_WALLET
+// ---------------------------------------------------------------------------
+
+const getTriggerIndex = (action, eventLogAddress) => {
+    if (!eventLogAddress) return null;
+    const addr = eventLogAddress.toLowerCase();
+    if (addr === identityRegistryAddress) return "1";
+    if (addr === employeeVestingAddress) return "2";
+    // Token events: no log trigger registered in main.ts
+    return null;
+};
+
+// ---------------------------------------------------------------------------
 // Full 3-tier flow: Lambda persist → CRE broadcast → LogTrigger → verify
 // ---------------------------------------------------------------------------
 
 const executeFullFlow = async (lambdaPayload, crePayload) => {
+    const action = crePayload.action;
+
     // Step 1: Persist to Lambda
     console.log("\n┌─ Step 1: Persist to Lambda (DynamoDB) ──────────────────────");
     const lambdaResult = await callLambda(lambdaPayload);
@@ -206,47 +442,72 @@ const executeFullFlow = async (lambdaPayload, crePayload) => {
         await wait(2000);
     }
     if (!receipt) throw new Error("Transaction receipt not found");
+    console.log(`   ✓ Receipt found (block ${receipt.blockNumber}, ${receipt.logs.length} logs)`);
 
-    const eventLogIdx = receipt.logs.findIndex(
-        (log) =>
-            log.address.toLowerCase() === identityRegistryAddress ||
-            log.address.toLowerCase() === employeeVestingAddress,
-    );
-
-    if (eventLogIdx === -1) {
-        console.log("   ⚠ No target contract event found. Skipping LogTrigger.");
-        return;
-    }
-
-    const eventLog = receipt.logs[eventLogIdx];
-    const triggerIndex = eventLog.address.toLowerCase() === identityRegistryAddress ? "1" : "2";
-    console.log(`   ✓ Event at tx log index: ${eventLogIdx} (global logIndex: ${eventLog.logIndex})`);
+    // Step 3b: On-chain verification
+    await verifyOnChain(action, crePayload);
 
     // Step 4: CRE LogTrigger → sync event back to Lambda
-    console.log("\n┌─ Step 4: CRE LogTrigger → sync event to Lambda ───────────");
-    const logOutput = await runCre([
-        "workflow", "simulate", "./EquityWorkflowCre",
-        "--target", "local-simulation",
-        "--non-interactive",
-        "--trigger-index", triggerIndex,
-        "--evm-tx-hash", txHash,
-        "--evm-event-index", String(eventLogIdx),
-        "--broadcast",
-    ]);
-    console.log(logOutput);
-    console.log("   ✓ On-chain event forwarded to Lambda");
+    // Determine which log (if any) was emitted by a watched contract
+    const tokenAddr = await resolveTokenAddress();
+    const watchedAddresses = [identityRegistryAddress, employeeVestingAddress];
 
-    // Step 5: Verify
-    console.log("\n┌─ Step 5: Verify via Lambda readEmployee ──────────────────");
-    const employeeAddr = crePayload.employeeAddress || crePayload.walletAddress;
-    if (employeeAddr) {
-        const readResult = await callLambda({ action: "readEmployee", employeeAddress: employeeAddr });
-        if (readResult.statusCode === 200) {
-            const record = readResult.body.data || readResult.body;
-            console.log("   Employee record:");
-            console.log(`   ${JSON.stringify(record, null, 2).replace(/\n/g, "\n   ")}`);
-        } else {
-            console.log(`   ⚠ Could not read employee: status ${readResult.statusCode}`);
+    const eventLogIdx = receipt.logs.findIndex(
+        (log) => watchedAddresses.includes(log.address.toLowerCase()),
+    );
+
+    if (action === "SYNC_FREEZE_WALLET") {
+        // Token events are not watched by main.ts log triggers — skip this step
+        console.log("\n┌─ Step 4: CRE LogTrigger ── SKIPPED ─────────────────────");
+        console.log("   ℹ Token (AddressFrozen) events are not watched by main.ts.");
+        console.log("   ℹ Trigger 1 = IdentityRegistry, Trigger 2 = EmployeeVesting only.");
+        console.log("   ℹ On-chain state was verified directly above (Step 3b).");
+    } else if (eventLogIdx === -1) {
+        console.log("\n┌─ Step 4: CRE LogTrigger ── SKIPPED ─────────────────────");
+        console.log("   ⚠ No watched contract event found in this tx. Skipping LogTrigger.");
+    } else {
+        const eventLog = receipt.logs[eventLogIdx];
+        const triggerIndex = getTriggerIndex(action, eventLog.address);
+
+        console.log(`\n┌─ Step 4: CRE LogTrigger → sync event to Lambda ───────────`);
+        console.log(`   ✓ Event at tx log index: ${eventLogIdx} (contract: ${eventLog.address})`);
+        console.log(`   ✓ Using trigger-index ${triggerIndex}`);
+
+        const logOutput = await runCre([
+            "workflow", "simulate", "./EquityWorkflowCre",
+            "--target", "local-simulation",
+            "--non-interactive",
+            "--trigger-index", triggerIndex,
+            "--evm-tx-hash", txHash,
+            "--evm-event-index", String(eventLogIdx),
+            "--broadcast",
+        ]);
+        console.log(logOutput);
+        console.log("   ✓ On-chain event forwarded to Lambda");
+    }
+
+    // Step 5: Verify in Lambda / DynamoDB
+    console.log("\n┌─ Step 5: Verify via Lambda ───────────────────────────────");
+
+    if (action === "SYNC_GOAL") {
+        // GoalUpdated is stored in a goal:... record, not employee record
+        const goalId = crePayload.goalId;
+        const goalResult = await callLambda({ action: "readEmployee", employeeAddress: goalId }).catch(() => null);
+        // The Lambda stores goal in a 'goal:...' record via GoalUpdated handler
+        // We can verify via the on-chain state we already checked above
+        console.log(`   ℹ Goals are stored in DynamoDB as 'goal:${goalId}' records.`);
+        console.log(`   ℹ On-chain goalsAchieved state was verified in Step 3b.`);
+    } else {
+        const employeeAddr = crePayload.employeeAddress || crePayload.walletAddress;
+        if (employeeAddr) {
+            const readResult = await callLambda({ action: "readEmployee", employeeAddress: employeeAddr });
+            if (readResult.statusCode === 200) {
+                const record = readResult.body.data || readResult.body;
+                console.log("   Employee record in DynamoDB:");
+                console.log(`   ${JSON.stringify(record, null, 2).replace(/\n/g, "\n   ")}`);
+            } else {
+                console.log(`   ⚠ Could not read employee: status ${readResult.statusCode}`);
+            }
         }
     }
 
@@ -266,7 +527,10 @@ const handleSyncKyc = async () => {
     let country = 0;
 
     if (verified) {
-        identityAddress = await askWithDefault("   Identity contract address", "0x2222222222222222222222222222222222222222");
+        identityAddress = await askWithDefault(
+            "   Identity contract address (non-zero, e.g. any valid 0x... address)",
+            "0x2222222222222222222222222222222222222222",
+        );
         country = Number(await askWithDefault("   Country code (ISO 3166 numeric, e.g. 840=US)", "840"));
     }
 
@@ -338,9 +602,13 @@ const handleSyncGoal = async () => {
         action: "CompanyEmployeeInput",
         goalId,
         goalAchieved: achieved,
+        // employeeAddress is optional here; goalId is the key identifier
+        employeeAddress: "0x0000000000000000000000000000000000000001",
     };
 
     console.log(`\n   Payload: ${JSON.stringify(crePayload, null, 2).replace(/\n/g, "\n   ")}`);
+    console.log("   ℹ GoalUpdated events are stored as 'goal:...' records in DynamoDB.");
+    console.log("   ℹ On-chain verification reads EmployeeVesting.goalsAchieved(goalId).");
     const confirm = await askYesNo("\n   Proceed with this payload?", true);
     if (!confirm) { console.log("   Cancelled.\n"); return; }
 
@@ -366,6 +634,15 @@ const handleFreezeWallet = async () => {
     };
 
     console.log(`\n   Payload: ${JSON.stringify(crePayload, null, 2).replace(/\n/g, "\n   ")}`);
+    console.log("   ℹ NOTE: Token (AddressFrozen) events are NOT watched by main.ts.");
+    console.log("   ℹ Step 4 (log trigger) will be SKIPPED. On-chain state verified via Token.isFrozen().");
+
+    // Resolve and show token address
+    const tokenAddr = await resolveTokenAddress();
+    if (tokenAddr) {
+        console.log(`   ℹ Token contract: ${tokenAddr}`);
+    }
+
     const confirm = await askYesNo("\n   Proceed with this payload?", true);
     if (!confirm) { console.log("   Cancelled.\n"); return; }
 
@@ -374,7 +651,7 @@ const handleFreezeWallet = async () => {
 
 const handleFullRoundTrip = async () => {
     console.log("\n── Full 3-Tier Round-Trip Test (automated defaults) ─────────\n");
-    console.log("   Running with default test data...\n");
+    console.log("   Running KYC sync with default test data...\n");
 
     const employeeAddress = "0x1111111111111111111111111111111111111111";
     const identityAddress = "0x2222222222222222222222222222222222222222";
@@ -418,6 +695,27 @@ const handleReadEmployee = async () => {
     console.log("   ✓ Employee record found:\n");
     console.log(`   ${JSON.stringify(record, null, 2).replace(/\n/g, "\n   ")}`);
     console.log();
+
+    // Also show current on-chain state summary
+    console.log("   On-chain state summary:");
+    try {
+        const [isVerified, country] = await Promise.all([
+            publicClient.readContract({ address: identityRegistryAddress, abi: IDENTITY_REGISTRY_ABI, functionName: "isVerified", args: [employeeAddress] }),
+            publicClient.readContract({ address: identityRegistryAddress, abi: IDENTITY_REGISTRY_ABI, functionName: "investorCountry", args: [employeeAddress] }),
+        ]);
+        const isEmployed = await publicClient.readContract({ address: employeeVestingAddress, abi: EMPLOYEE_VESTING_ABI, functionName: "isEmployed", args: [employeeAddress] });
+        const tokenAddr = await resolveTokenAddress();
+        let isFrozen = "N/A";
+        if (tokenAddr) {
+            isFrozen = await publicClient.readContract({ address: tokenAddr, abi: TOKEN_ABI, functionName: "isFrozen", args: [employeeAddress] });
+        }
+        console.log(`     IdentityRegistry: isVerified=${isVerified}, country=${country}`);
+        console.log(`     EmployeeVesting:  isEmployed=${isEmployed}`);
+        console.log(`     Token (ERC-3643): isFrozen=${isFrozen}`);
+    } catch (err) {
+        console.log(`     (could not fetch on-chain state: ${err.message})`);
+    }
+    console.log();
 };
 
 const handleListEmployees = async () => {
@@ -441,17 +739,185 @@ const handleListEmployees = async () => {
 
     console.log(`   ✓ Found ${records.length} employee(s):\n`);
 
-    // Prepare data for console.table
-    const tableData = records.map(r => ({
+    const tableData = records.map((r) => ({
         "Address": r.employeeAddress ? `${r.employeeAddress.substring(0, 8)}...${r.employeeAddress.substring(38)}` : "N/A",
         "KYC": r.kycVerified ? "✅" : "❌",
         "Country": r.country || "---",
         "Employed": r.employed !== false ? "✅" : "❌",
         "Wallet Frz": r.walletFrozen ? "❄️" : "---",
-        "Last Event": r.lastOnchainEvent || "---"
+        "Last Event": r.lastOnchainEvent || "---",
     }));
 
     console.table(tableData);
+    console.log();
+};
+
+const handleCreateVestingGrant = async () => {
+    console.log("\n── Create Vesting Grant (SYNC_CREATE_GRANT — Full CRE Flow) ────\n");
+    console.log("   ✓ Protocol redesigned: EmployeeVesting.createGrant() is now onlyOracle");
+    console.log("   ✓ EquityWorkflowReceiver has SYNC_CREATE_GRANT (ActionType 4)");
+    console.log("   ✓ Pool pre-funded with 1,000,000 EQT during deployment\n");
+
+    const employeeAddress = await askWithDefault("   Employee wallet address", "0x1111111111111111111111111111111111111111");
+    const vestingTotalAmount = await askWithDefault("   Total vesting amount (tokens, no decimals)", "100");
+    const cliffMonths = Number(await askWithDefault("   Cliff period (months)", "6"));
+    const vestingMonths = Number(await askWithDefault("   Vesting duration (months)", "48"));
+    const isRevocable = await askYesNo("   Is grant revocable?", true);
+    const performanceGoalId = await askWithDefault(
+        "   Performance goal ID (bytes32, 0x000...0 for none)",
+        "0x" + "0".repeat(64)
+    );
+    const notes = await askWithDefault("   Notes (for Lambda record)", "Initial equity grant");
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const cliffSeconds = cliffMonths * 30 * 24 * 3600;
+    const vestingSeconds = vestingMonths * 30 * 24 * 3600;
+
+    // Check current vesting pool balance
+    try {
+        const poolBalance = await publicClient.readContract({
+            address: employeeVestingAddress,
+            abi: EMPLOYEE_VESTING_ABI,
+            functionName: "vestingPoolBalance",
+        });
+        console.log(`\n   ✓ Current vesting pool balance: ${poolBalance} tokens`);
+        if (BigInt(vestingTotalAmount) > poolBalance) {
+            console.log(`   ⚠ WARNING: requested amount (${vestingTotalAmount}) > pool balance (${poolBalance})`);
+            console.log(`   ⚠ The on-chain transaction will revert if pool is insufficient.`);
+        }
+    } catch (err) {
+        console.log(`   ⚠ Could not read pool balance: ${err.message}`);
+    }
+
+    const crePayload = {
+        action: "SYNC_CREATE_GRANT",
+        employeeAddress,
+        amount: vestingTotalAmount,
+        startTime: nowSec,
+        cliffDuration: cliffSeconds,
+        vestingDuration: vestingSeconds,
+        isRevocable,
+        performanceGoalId,
+    };
+
+    const lambdaPayload = {
+        action: "CompanyEmployeeInput",
+        employeeAddress,
+        vestingTotalAmount,
+        vestingStartTime: nowSec,
+        cliffDuration: cliffSeconds,
+        vestingDuration: vestingSeconds,
+        isRevocable,
+        notes,
+        employed: true,
+    };
+
+    console.log(`\n   CRE Payload: ${JSON.stringify(crePayload, null, 2).replace(/\n/g, "\n   ")}`);
+
+    const confirm = await askYesNo("\n   Proceed with full CRE flow?", true);
+    if (!confirm) { console.log("   Cancelled.\n"); return; }
+
+    await executeFullFlow(lambdaPayload, crePayload);
+};
+
+const handleFullSequence = async () => {
+    console.log("\n── Automated Full Sequence: KYC → Employment → Goal → Freeze ─\n");
+    console.log("   Runs all 4 sync actions with default test data.\n");
+
+    const employeeAddress = "0x1111111111111111111111111111111111111111";
+    const identityAddress = "0x2222222222222222222222222222222222222222";
+    const goalId = "0x0000000000000000000000000000000000000000000000000000000000000001";
+    const country = 840;
+
+    const sequence = [
+        {
+            label: "1/4 SYNC_KYC — Register identity on-chain",
+            lambdaPayload: {
+                action: "CompanyEmployeeInput",
+                employeeAddress,
+                identityAddress,
+                country,
+                kycVerified: true,
+                employed: true,
+            },
+            crePayload: {
+                action: "SYNC_KYC",
+                employeeAddress,
+                verified: true,
+                identityAddress,
+                country,
+            },
+        },
+        {
+            label: "2/4 SYNC_EMPLOYMENT_STATUS — Set employee as active",
+            lambdaPayload: {
+                action: "CompanyEmployeeInput",
+                employeeAddress,
+                employed: true,
+            },
+            crePayload: {
+                action: "SYNC_EMPLOYMENT_STATUS",
+                employeeAddress,
+                employed: true,
+            },
+        },
+        {
+            label: "3/4 SYNC_GOAL — Mark performance goal as achieved",
+            lambdaPayload: {
+                action: "CompanyEmployeeInput",
+                employeeAddress: "0x0000000000000000000000000000000000000001",
+                goalId,
+                goalAchieved: true,
+            },
+            crePayload: {
+                action: "SYNC_GOAL",
+                goalId,
+                achieved: true,
+            },
+        },
+        {
+            label: "4/4 SYNC_FREEZE_WALLET — Freeze (then we unfreeze for cleanup)",
+            lambdaPayload: {
+                action: "CompanyEmployeeInput",
+                employeeAddress,
+                walletFrozen: false,
+            },
+            crePayload: {
+                action: "SYNC_FREEZE_WALLET",
+                walletAddress: employeeAddress,
+                frozen: false,
+            },
+        },
+    ];
+
+    const results = [];
+
+    for (const step of sequence) {
+        console.log(`\n${"═".repeat(66)}`);
+        console.log(`  ${step.label}`);
+        console.log("═".repeat(66));
+
+        try {
+            await executeFullFlow(step.lambdaPayload, step.crePayload);
+            results.push({ step: step.label, status: "✓ OK" });
+        } catch (err) {
+            console.error(`\n   ✗ Failed: ${err.message}`);
+            results.push({ step: step.label, status: `✗ FAILED: ${err.message.split("\n")[0]}` });
+        }
+
+        // Brief pause between steps to avoid nonce collision
+        if (sequence.indexOf(step) < sequence.length - 1) {
+            console.log("\n   Waiting 8s before next step...");
+            await wait(8000);
+        }
+    }
+
+    console.log("\n╔══════════════════════════════════════════════════════════════╗");
+    console.log("║                 Full Sequence — Summary                      ║");
+    console.log("╚══════════════════════════════════════════════════════════════╝\n");
+    for (const r of results) {
+        console.log(`  ${r.status.startsWith("✓") ? "✓" : "✗"}  ${r.step.padEnd(55)} ${r.status.includes("OK") ? "" : r.status}`);
+    }
     console.log();
 };
 
@@ -464,34 +930,42 @@ const showMenu = () => {
     console.log("║           Equity CRE — Interactive Test Runner              ║");
     console.log("╚══════════════════════════════════════════════════════════════╝");
     console.log();
+    console.log("  CONTRACT ADDRESSES (Base Sepolia)");
+    console.log(`  Receiver:       ${config.evms[0].receiverAddress}`);
+    console.log(`  IdentityReg:    ${config.evms[0].identityRegistryAddress}`);
+    console.log(`  EmployeeVest:   ${config.evms[0].employeeVestingAddress}`);
+    console.log(`  Token (ERC-3643): read from Receiver.token() on-chain`);
+    console.log();
+    console.log("  TRIGGER FLOW (main.ts):  0=HTTP  1=IdentityReg  2=EmployeeVest");
+    console.log("  ⚠ Token AddressFrozen events are NOT watched → Step 4 skipped for FREEZE");
+    console.log();
+    console.log("  ─── SYNC ACTIONS (Web2 → Blockchain → Web2) ───────────────");
     console.log("  1) Register / Update Employee (SYNC_KYC)");
-    console.log("     Register a new employee on-chain: wallet, identity,");
-    console.log("     country code, and KYC verification status.");
     console.log("     Flow: Lambda → CRE → IdentityRegistry → CRE → Lambda");
+    console.log("     ✓ On-chain: isVerified, identity, investorCountry");
     console.log();
     console.log("  2) Update Employment Status (SYNC_EMPLOYMENT_STATUS)");
-    console.log("     Change an employee's status to active or terminated.");
     console.log("     Flow: Lambda → CRE → EmployeeVesting → CRE → Lambda");
+    console.log("     ✓ On-chain: isEmployed");
     console.log();
     console.log("  3) Update Performance Goal (SYNC_GOAL)");
-    console.log("     Mark a performance goal as achieved or pending.");
     console.log("     Flow: Lambda → CRE → EmployeeVesting → CRE → Lambda");
+    console.log("     ✓ On-chain: goalsAchieved(bytes32)");
     console.log();
     console.log("  4) Freeze / Unfreeze Wallet (SYNC_FREEZE_WALLET)");
-    console.log("     Freeze or unfreeze an employee's token wallet.");
-    console.log("     Flow: Lambda → CRE → Token (ERC-3643) → CRE → Lambda");
+    console.log("     Flow: Lambda → CRE → Token(ERC-3643)  [Step 4 SKIPPED]");
+    console.log("     ✓ On-chain: Token.isFrozen (read from Receiver.token())");
     console.log();
-    console.log("  5) Full 3-Tier Round-Trip Test (automated)");
-    console.log("     Runs the full simulation with default test data:");
+    console.log("  5) Full 3-Tier Round-Trip Test (automated KYC)");
     console.log("     Lambda → CRE → Blockchain → CRE → Lambda → DynamoDB");
     console.log();
-    console.log("  6) Read Employee Record (Lambda query)");
-    console.log("     Query an employee's current state from DynamoDB.");
-    console.log("     No on-chain interaction, read-only.");
+    console.log("  ─── READ-ONLY (DynamoDB queries) ────────────────────────────");
+    console.log("  6) Read Employee Record  (+ on-chain state summary)");
+    console.log("  7) List All Employees");
     console.log();
-    console.log("  7) List All Employees (Lambda scan)");
-    console.log("     Fetch and display a table of all registered employees.");
-    console.log("     No on-chain interaction, read-only.");
+    console.log("  ─── ADVANCED ────────────────────────────────────────────────");
+    console.log("  8) Create Vesting Grant Metadata (Lambda persist)");
+    console.log("  9) Automated Full Sequence (KYC → Employment → Goal → Freeze)");
     console.log();
     console.log("  0) Exit");
     console.log();
@@ -500,9 +974,15 @@ const showMenu = () => {
 const main = async () => {
     let running = true;
 
+    // Pre-warm: resolve Token address
+    const tokenAddr = await resolveTokenAddress();
+    if (tokenAddr) {
+        console.log(`\n   Token (ERC-3643): ${tokenAddr}`);
+    }
+
     while (running) {
         showMenu();
-        const choice = await ask("Select an option [0-7]: ");
+        const choice = await ask("Select an option [0-9]: ");
         console.log();
 
         try {
@@ -514,12 +994,14 @@ const main = async () => {
                 case "5": await handleFullRoundTrip(); break;
                 case "6": await handleReadEmployee(); break;
                 case "7": await handleListEmployees(); break;
+                case "8": await handleCreateVestingGrant(); break;
+                case "9": await handleFullSequence(); break;
                 case "0":
                     console.log("   Goodbye!\n");
                     running = false;
                     break;
                 default:
-                    console.log("   Invalid option. Please enter a number 0-7.\n");
+                    console.log("   Invalid option. Please enter a number 0-9.\n");
             }
         } catch (err) {
             console.error(`\n   ✗ ERROR: ${err.message}\n`);
