@@ -80,12 +80,26 @@ const syncCreateGrantSchema = z.object({
   performanceGoalId: bytes32Schema.optional(),     // 0x000...0 = no condition
 });
 
+const baseSyncInputSchema = z.discriminatedUnion("action", [
+  syncKycSchema,
+  syncEmploymentSchema,
+  syncGoalSchema,
+  syncFreezeWalletSchema,
+  syncCreateGrantSchema,
+]);
+
+const syncBatchSchema = z.object({
+  action: z.literal("SYNC_BATCH"),
+  batches: z.array(baseSyncInputSchema),
+});
+
 const syncInputSchema = z.discriminatedUnion("action", [
   syncKycSchema,
   syncEmploymentSchema,
   syncGoalSchema,
   syncFreezeWalletSchema,
   syncCreateGrantSchema,
+  syncBatchSchema,
 ]);
 
 type SyncInput = z.infer<typeof syncInputSchema>;
@@ -100,6 +114,7 @@ const ACTION_TYPE = {
   SYNC_GOAL: 2,
   SYNC_FREEZE_WALLET: 3,
   SYNC_CREATE_GRANT: 4,
+  SYNC_BATCH: 5,
 } as const;
 
 const safeJsonStringify = (obj: unknown): string =>
@@ -218,6 +233,18 @@ const buildInstruction = (input: SyncInput): { actionType: number; payload: `0x$
 
       return {
         actionType: ACTION_TYPE.SYNC_CREATE_GRANT,
+        payload,
+      };
+    }
+    case "SYNC_BATCH": {
+      const payloads = input.batches.map(batch => buildInstruction(batch).payload);
+      const payload = encodeAbiParameters(
+        parseAbiParameters("bytes[] batches"),
+        [payloads],
+      );
+
+      return {
+        actionType: ACTION_TYPE.SYNC_BATCH,
         payload,
       };
     }
