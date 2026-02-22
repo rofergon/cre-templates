@@ -26,7 +26,8 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         SYNC_EMPLOYMENT_STATUS,  // 1
         SYNC_GOAL,               // 2
         SYNC_FREEZE_WALLET,      // 3
-        SYNC_CREATE_GRANT        // 4
+        SYNC_CREATE_GRANT,       // 4
+        SYNC_BATCH               // 5
     }
 
     IIdentityRegistry public identityRegistry;
@@ -87,6 +88,10 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
     // ──────────────────────────────────────────────────────
 
     function _processReport(bytes calldata report) internal override {
+        _processSingleReport(report);
+    }
+
+    function _processSingleReport(bytes memory report) internal {
         (uint8 rawActionType, bytes memory payload) = abi.decode(report, (uint8, bytes));
         ActionType actionType = ActionType(rawActionType);
 
@@ -100,6 +105,11 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
             _processFreezeWalletPayload(payload);
         } else if (actionType == ActionType.SYNC_CREATE_GRANT) {
             _processCreateGrantPayload(payload);
+        } else if (actionType == ActionType.SYNC_BATCH) {
+            bytes[] memory batches = abi.decode(payload, (bytes[]));
+            for (uint256 i = 0; i < batches.length; i++) {
+                _processSingleReport(batches[i]);
+            }
         } else {
             revert UnsupportedAction(rawActionType);
         }
