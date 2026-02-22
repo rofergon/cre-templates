@@ -22,13 +22,8 @@ contract Compliance is ICompliance, Ownable {
 
     constructor() {}
 
-    /**
-     * @dev Checks if a transfer can be executed.
-     * @param _from The address of the sender.
-     * @param _to The address of the receiver.
-     * @param _amount The amount of tokens to transfer.
-     */
-    function canTransfer(address _from, address _to, uint256 _amount) external view override returns (bool) {
+    /// @dev Checks if a transfer can be executed. Returns true for all transfers.
+    function canTransfer(address, address, uint256) external pure override returns (bool) {
         // Simple compliance logic: allow all transfers by default.
         // In a real-world scenario, this would include checks for KYC, country restrictions, etc.
         return true;
