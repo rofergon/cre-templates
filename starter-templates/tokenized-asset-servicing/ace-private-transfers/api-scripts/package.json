@@ -1,0 +1,18 @@
+{
+    "name": "ace-api-scripts",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "balances": "tsx src/balances.ts",
+        "shielded-address": "tsx src/shielded-address.ts",
+        "private-transfer": "tsx src/private-transfer.ts",
+        "withdraw": "tsx src/withdraw.ts"
+    },
+    "dependencies": {
+        "ethers": "^6.10.0"
+    },
+    "devDependencies": {
+        "tsx": "^4.7.1",
+        "typescript": "^5.3.3"
+    }
+}

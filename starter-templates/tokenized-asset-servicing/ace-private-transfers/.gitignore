@@ -1,0 +1,19 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+broadcast/
+
+# Dotenv local file
+.env
+.env.local
+
+# Node
+node_modules/
+
+# Foundry
+lib/
+
+# macOS
+.DS_Store
