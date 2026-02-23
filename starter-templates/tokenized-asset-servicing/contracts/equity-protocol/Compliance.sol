@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./ICompliance.sol";
+import "../interfaces/ICompliance.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Compliance is ICompliance, Ownable {

@@ -3,9 +3,9 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./IERC3643.sol";
-import "./IIdentityRegistry.sol";
-import "./ICompliance.sol";
+import "../interfaces/IERC3643.sol";
+import "../interfaces/IIdentityRegistry.sol";
+import "../interfaces/ICompliance.sol";
 
 contract Token is ERC20, Ownable, IERC3643 {
     IIdentityRegistry public override identityRegistry;

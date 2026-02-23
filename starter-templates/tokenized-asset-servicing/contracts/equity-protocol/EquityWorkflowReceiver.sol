@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "../interfaces/ReceiverTemplate.sol";
-import "./IIdentityRegistry.sol";
-import "./IERC3643.sol";
+import "../interfaces/IIdentityRegistry.sol";
+import "../interfaces/IERC3643.sol";
 import "./PrivateEmployeeEquity.sol";
 
 /// @title EquityWorkflowReceiver
