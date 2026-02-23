@@ -5,7 +5,7 @@ const ethers = hre.ethers;
 // Configuration
 // ──────────────────────────────────────────────────────────
 
-// Chainlink CRE Forwarder address on Base Sepolia
+// Chainlink CRE Forwarder address on Ethereum Sepolia
 const CHAINLINK_FORWARDER_ADDRESS = "0x82300bd7c3958625581cc2f77bc6464dcecdf3e5";
 
 // Vesting pool: tokens pre-funded into EmployeeVesting so CRE can create grants.
@@ -203,9 +203,7 @@ async function main() {
     console.log("Compliance:               ", complianceAddress);
     console.log("Token (ERC-3643, EQT):    ", tokenAddress);
     console.log("EmployeeVesting:          ", employeeVestingAddress);
-    console.log("EquityWorkflowReceiver:   ", equityWorkflowReceiverAddress);
-    console.log("");
-    console.log("Permissions:");
+    console.log("   EquityWorkflowReceiver:   " + equityWorkflowReceiverAddress);
     console.log("  IdentityRegistry owner  = Receiver  (SYNC_KYC)");
     console.log("  Token owner             = Receiver  (SYNC_FREEZE_WALLET)");
     console.log("  EmployeeVesting owner   = Deployer  (admin, revoke, fundVesting)");

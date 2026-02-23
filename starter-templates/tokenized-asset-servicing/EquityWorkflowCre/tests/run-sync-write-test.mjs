@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,8 +45,8 @@ const normalizePrivateKey = (value) => {
 const envFromFile = parseEnvFile(envPath);
 
 const rpcUrl =
-  process.env.BASE_SEPOLIA_RPC_URL ||
-  "https://virtual.base-sepolia.eu.rpc.tenderly.co/1b0d992e-47cd-4c87-ab28-359ec4147c3a";
+  process.env.SEPOLIA_RPC_URL ||
+  "https://sepolia.gateway.tenderly.co/3Gg3yWf8Ftc5qKVcpRZYuI";
 const lambdaUrl = process.env.LAMBDA_URL || envFromFile.LAMBDA_URL || config.url;
 const identityRegistryAddress = config.evms[0].identityRegistryAddress.toLowerCase();
 const autoBumpNonce = process.env.AUTO_BUMP_NONCE !== "false";
@@ -57,14 +57,14 @@ const normalizedPk = normalizePrivateKey(
 const signerAccount = normalizedPk ? privateKeyToAccount(normalizedPk) : null;
 
 const publicClient = createPublicClient({
-  chain: baseSepolia,
+  chain: sepolia,
   transport: http(rpcUrl),
 });
 
 const walletClient = signerAccount
   ? createWalletClient({
     account: signerAccount,
-    chain: baseSepolia,
+    chain: sepolia,
     transport: http(rpcUrl),
   })
   : null;
@@ -260,7 +260,7 @@ const run = async () => {
   console.log(`   writeReport txHash: ${txHash}`);
 
   const client = createPublicClient({
-    chain: baseSepolia,
+    chain: sepolia,
     transport: http(rpcUrl),
   });
 

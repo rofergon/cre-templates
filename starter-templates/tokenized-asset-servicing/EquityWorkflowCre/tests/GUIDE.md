@@ -31,10 +31,10 @@ LAMBDA_URL=https://<your-id>.lambda-url.us-east-2.on.aws/
 
 | Contract | Address |
 |---|---|
-| `EquityWorkflowReceiver` | `0x1a8d23329cf8641c6645b15Da2896Bd307b56B4a` |
-| `IdentityRegistry` | `0x1Ee184656d3E440c04bB874FDBdDA8Ba07F3E1A6` |
-| `EmployeeVesting` | `0xe875A81E95c276816e877dDC03A153465d0D9999` |
-| `Token` (ERC-3643, `EQT`) | `0xB4FE5972D8cD70494DE061471bb59BAC6F7c3c4F` |
+| `EquityWorkflowReceiver` | `0x83905819019A6DeeDFF834f08DeC8238e54EBf6e` |
+| `IdentityRegistry` | `0x31D26dE5f5a255D0748035D90Ec739840df55280` |
+| `EmployeeVesting` | `0x78a40e81b6C7770B686D6D0812431422B2CC6dbb` |
+| `Token` (ERC-3643, `EQT`) | `0x2a177f9498edAB038eBA5f094526f76118E2416F` |
 
 > `IdentityRegistry` and `Token` ownership have been transferred to `EquityWorkflowReceiver`.  
 > `EquityWorkflowReceiver` is also the sole authorized oracle in `EmployeeVesting`.  
@@ -291,7 +291,7 @@ Loads all employees from `tests/mock-employees.json` and processes them in a **s
 
 ## Useful Basescan Links
 
-- [EquityWorkflowReceiver](https://sepolia.basescan.org/address/0x1a8d23329cf8641c6645b15Da2896Bd307b56B4a)
-- [IdentityRegistry](https://sepolia.basescan.org/address/0x1Ee184656d3E440c04bB874FDBdDA8Ba07F3E1A6)
-- [EmployeeVesting](https://sepolia.basescan.org/address/0xe875A81E95c276816e877dDC03A153465d0D9999)
-- [Token (EQT)](https://sepolia.basescan.org/address/0xB4FE5972D8cD70494DE061471bb59BAC6F7c3c4F)
+- [EquityWorkflowReceiver](https://sepolia.etherscan.io/address/0x83905819019A6DeeDFF834f08DeC8238e54EBf6e)
+- [IdentityRegistry](https://sepolia.etherscan.io/address/0x31D26dE5f5a255D0748035D90Ec739840df55280)
+- [EmployeeVesting](https://sepolia.etherscan.io/address/0x78a40e81b6C7770B686D6D0812431422B2CC6dbb)
+- [Token (EQT)](https://sepolia.etherscan.io/address/0x2a177f9498edAB038eBA5f094526f76118E2416F)

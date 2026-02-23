@@ -66,11 +66,11 @@ Para detalle tecnico por dominio:
 ### 3.3 Contratos y red configurados
 Valores leidos de `EquityWorkflowCre/config.staging.json` y `EquityWorkflowCre/config.production.json`:
 
-- `receiverAddress`: `0x1a8d23329cf8641c6645b15Da2896Bd307b56B4a`
-- `identityRegistryAddress`: `0x1Ee184656d3E440c04bB874FDBdDA8Ba07F3E1A6`
-- `employeeVestingAddress`: `0xe875A81E95c276816e877dDC03A153465d0D9999`
-- `tokenAddress`: `0xB4FE5972D8cD70494DE061471bb59BAC6F7c3c4F`
-- `chainSelectorName`: `ethereum-testnet-sepolia-base-1`
+- `receiverAddress`: `0x83905819019A6DeeDFF834f08DeC8238e54EBf6e`
+- `identityRegistryAddress`: `0x31D26dE5f5a255D0748035D90Ec739840df55280`
+- `employeeVestingAddress`: `0x78a40e81b6C7770B686D6D0812431422B2CC6dbb`
+- `tokenAddress`: `0x2a177f9498edAB038eBA5f094526f76118E2416F`
+- `chainSelectorName`: `ethereum-testnet-sepolia`
 - `gasLimit`: `1000000`
 
 Forwarder CRE configurado en deploy script:

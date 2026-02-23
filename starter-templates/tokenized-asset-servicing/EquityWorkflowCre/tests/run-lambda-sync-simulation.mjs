@@ -2,7 +2,7 @@
  * run-lambda-sync-simulation.mjs
  *
  * 3-Tier Architecture Simulation:
- *   AWS (Lambda + DynamoDB)  ⟷  CRE Workflow  ⟷  Blockchain (Base Sepolia)
+ *   AWS (Lambda + DynamoDB)  ⟷  CRE Workflow  ⟷  Blockchain (Sepolia)
  *
  * Flow:
  *   1. Web Service → Lambda CompanyEmployeeInput (persist to DynamoDB)
@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPublicClient, http } from "viem";
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -60,8 +60,8 @@ if (!lambdaUrl) {
 }
 
 const rpcUrl =
-    process.env.BASE_SEPOLIA_RPC_URL ||
-    "https://virtual.base-sepolia.eu.rpc.tenderly.co/1b0d992e-47cd-4c87-ab28-359ec4147c3a";
+    process.env.SEPOLIA_RPC_URL ||
+    "https://sepolia.gateway.tenderly.co/3Gg3yWf8Ftc5qKVcpRZYuI";
 
 const identityRegistryAddress = config.evms[0].identityRegistryAddress.toLowerCase();
 const employeeVestingAddress = config.evms[0].employeeVestingAddress.toLowerCase();
@@ -79,7 +79,7 @@ const normalizedPk = normalizePrivateKey(
 );
 
 const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: sepolia,
     transport: http(rpcUrl),
 });
 

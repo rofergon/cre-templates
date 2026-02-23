@@ -17,8 +17,8 @@
 # ==========================================================================
 local-simulation:
   rpcs:
-    - chain-name: ethereum-testnet-sepolia-base-1
-      url: https://virtual.base-sepolia.eu.rpc.tenderly.co/1b0d992e-47cd-4c87-ab28-359ec4147c3a
+    - chain-name: ethereum-testnet-sepolia
+      url: https://sepolia.gateway.tenderly.co/3Gg3yWf8Ftc5qKVcpRZYuI
 
 # ==========================================================================
 staging:
@@ -28,6 +28,4 @@ staging:
     workflow-owner-address: "(optional) Multi-signature contract address"
   rpcs:
     - chain-name: ethereum-testnet-sepolia
-      url: https://sepolia.infura.io/v3/YOUR_API_KEY
-    - chain-name: ethereum-testnet-sepolia-base-1
-      url: <select your own rpc url>
+      url: https://sepolia.gateway.tenderly.co/3Gg3yWf8Ftc5qKVcpRZYuI

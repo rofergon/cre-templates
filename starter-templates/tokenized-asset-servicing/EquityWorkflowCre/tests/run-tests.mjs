@@ -4,10 +4,10 @@
  * Interactive CLI for the Equity CRE protocol.
  * Tests the full 3-tier flow: Lambda → CRE → Blockchain → CRE → Lambda
  *
- * Protocol contracts (Base Sepolia):
- *   Receiver         : 0x69d2FEb2299424f9c6a14fc2D87d9B3f7F819165
- *   IdentityRegistry : 0x66f6ae7Dc6f48f9c62360d5dFaf1883841Fc9cce
- *   EmployeeVesting  : 0x96f559Be216Af03CB9bFe42A6E84c8B41841b386
+ * Protocol contracts (Sepolia):
+ *   Receiver         : 0x83905819019A6DeeDFF834f08DeC8238e54EBf6e
+ *   IdentityRegistry : 0x31D26dE5f5a255D0748035D90Ec739840df55280
+ *   EmployeeVesting  : 0x78a40e81b6C7770B686D6D0812431422B2CC6dbb
  *   Token (ERC-3643) : read from Receiver.token()
  *
  * Trigger-index mapping (main.ts):
@@ -23,7 +23,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPublicClient, http } from "viem";
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 
 // ---------------------------------------------------------------------------
 // Paths & config
@@ -60,8 +60,8 @@ const parseEnvFile = (path) => {
 const envFromFile = parseEnvFile(envPath);
 const lambdaUrl = process.env.LAMBDA_URL || envFromFile.LAMBDA_URL;
 const rpcUrl =
-    process.env.BASE_SEPOLIA_RPC_URL ||
-    "https://virtual.base-sepolia.eu.rpc.tenderly.co/1b0d992e-47cd-4c87-ab28-359ec4147c3a";
+    process.env.SEPOLIA_RPC_URL ||
+    "https://sepolia.gateway.tenderly.co/3Gg3yWf8Ftc5qKVcpRZYuI";
 
 const receiverAddress = config.evms[0].receiverAddress;
 const identityRegistryAddress = config.evms[0].identityRegistryAddress.toLowerCase();
@@ -80,7 +80,7 @@ const normalizedPk = normalizePrivateKey(
 );
 
 const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: sepolia,
     transport: http(rpcUrl),
 });
 

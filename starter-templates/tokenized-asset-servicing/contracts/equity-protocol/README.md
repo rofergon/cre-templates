@@ -10,18 +10,18 @@ Below is the architecture and flow diagram of the protocol's contracts:
 
 ![Solidity Architecture](../../equity_solidity_architecture.svg)
 
-## Deployed Contracts (Base Sepolia Testnet)
+## Deployed Contracts (Ethereum Sepolia Testnet)
 
 | Contract | Address |
 |---|---|
-| `EquityWorkflowReceiver` | `0x1a8d23329cf8641c6645b15Da2896Bd307b56B4a` |
-| `IdentityRegistry` | `0x1Ee184656d3E440c04bB874FDBdDA8Ba07F3E1A6` |
-| `EmployeeVesting` | `0xe875A81E95c276816e877dDC03A153465d0D9999` |
-| `Token` (ERC-3643 `EQT`) | `0xB4FE5972D8cD70494DE061471bb59BAC6F7c3c4F` |
+| `EquityWorkflowReceiver` | `0x83905819019A6DeeDFF834f08DeC8238e54EBf6e` |
+| `IdentityRegistry` | `0x31D26dE5f5a255D0748035D90Ec739840df55280` |
+| `EmployeeVesting` | `0x78a40e81b6C7770B686D6D0812431422B2CC6dbb` |
+| `Token` (ERC-3643 `EQT`) | `0x2a177f9498edAB038eBA5f094526f76118E2416F` |
 
 > **Ownership model**: Ownership of `IdentityRegistry` and `Token` has been transferred to `EquityWorkflowReceiver`. `EquityWorkflowReceiver` is also registered as an oracle in `EmployeeVesting`. This means all state changes flow exclusively through CRE-verified reports.
 
-> **Chainlink Forwarder (Base Sepolia)**: `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`
+> **Chainlink Forwarder (Ethereum Sepolia)**: `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`
 
 ## Main Components
 

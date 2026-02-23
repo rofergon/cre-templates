@@ -7,8 +7,8 @@ require("dotenv").config({ path: "../.env" });
 module.exports = {
   solidity: "0.8.20",
   networks: {
-    baseSepolia: {
-      url: "https://virtual.base-sepolia.eu.rpc.tenderly.co/1b0d992e-47cd-4c87-ab28-359ec4147c3a",
+    sepolia: {
+      url: "https://sepolia.gateway.tenderly.co/3Gg3yWf8Ftc5qKVcpRZYuI",
       accounts: process.env.CRE_ETH_PRIVATE_KEY ? [process.env.CRE_ETH_PRIVATE_KEY] : [],
     },
   },
