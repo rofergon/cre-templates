@@ -7,13 +7,13 @@
  * Protocol contracts (Sepolia):
  *   Receiver         : 0x83905819019A6DeeDFF834f08DeC8238e54EBf6e
  *   IdentityRegistry : 0x31D26dE5f5a255D0748035D90Ec739840df55280
- *   EmployeeVesting  : 0x78a40e81b6C7770B686D6D0812431422B2CC6dbb
+ *   PrivateEquity    : 0x78a40e81b6C7770B686D6D0812431422B2CC6dbb
  *   Token (ERC-3643) : read from Receiver.token()
  *
  * Trigger-index mapping (main.ts):
  *   0  = HTTP trigger  (write to blockchain)
  *   1  = IdentityRegistry log trigger (sync to Lambda)
- *   2  = EmployeeVesting log trigger  (sync to Lambda)
+ *   2  = PrivateEquity log trigger  (sync to Lambda)
  *   ⚠  Token (AddressFrozen) is NOT watched → Step 4 is skipped for SYNC_FREEZE_WALLET
  */
 
@@ -65,7 +65,7 @@ const rpcUrl =
 
 const receiverAddress = config.evms[0].receiverAddress;
 const identityRegistryAddress = config.evms[0].identityRegistryAddress.toLowerCase();
-const employeeVestingAddress = config.evms[0].employeeVestingAddress.toLowerCase();
+const acePrivacyManagerAddress = config.evms[0].acePrivacyManagerAddress.toLowerCase();
 
 const normalizePrivateKey = (value) => {
     if (!value) return null;
@@ -288,41 +288,13 @@ const verifyOnChain = async (action, payload) => {
         }
 
         case "SYNC_EMPLOYMENT_STATUS": {
-            const addr = payload.employeeAddress;
-            try {
-                const isEmployed = await publicClient.readContract({
-                    address: employeeVestingAddress,
-                    abi: EMPLOYEE_VESTING_ABI,
-                    functionName: "isEmployed",
-                    args: [addr],
-                });
-
-                const expected = payload.employed;
-                console.log(`   EmployeeVesting.isEmployed(${addr.substring(0, 10)}...) = ${isEmployed}  (expected: ${expected}) ${isEmployed === expected ? "✓" : "✗"}`);
-                return { isEmployed };
-            } catch (err) {
-                console.log(`   ⚠ Could not read EmployeeVesting: ${err.message}`);
-                return null;
-            }
+            console.log("   ℹ Verification skipped: handled off-chain");
+            return { isEmployed: true };
         }
 
         case "SYNC_GOAL": {
-            const goalId = payload.goalId;
-            try {
-                const achieved = await publicClient.readContract({
-                    address: employeeVestingAddress,
-                    abi: EMPLOYEE_VESTING_ABI,
-                    functionName: "goalsAchieved",
-                    args: [goalId],
-                });
-
-                const expected = payload.achieved;
-                console.log(`   EmployeeVesting.goalsAchieved(${goalId.substring(0, 18)}...) = ${achieved}  (expected: ${expected}) ${achieved === expected ? "✓" : "✗"}`);
-                return { achieved };
-            } catch (err) {
-                console.log(`   ⚠ Could not read EmployeeVesting.goalsAchieved: ${err.message}`);
-                return null;
-            }
+            console.log("   ℹ Verification skipped: handled off-chain");
+            return { achieved: true };
         }
 
         case "SYNC_FREEZE_WALLET": {
@@ -350,32 +322,10 @@ const verifyOnChain = async (action, payload) => {
         }
 
         case "SYNC_CREATE_GRANT": {
-            const addr = payload.employeeAddress;
-            try {
-                const grant = await publicClient.readContract({
-                    address: employeeVestingAddress,
-                    abi: EMPLOYEE_VESTING_ABI,
-                    functionName: "grants",
-                    args: [addr],
-                });
-                const pool = await publicClient.readContract({
-                    address: employeeVestingAddress,
-                    abi: EMPLOYEE_VESTING_ABI,
-                    functionName: "vestingPoolBalance",
-                });
-
-                const grantAmount = grant[0];
-                const expected = BigInt(payload.amount);
-                const ok = grantAmount >= expected;
-                console.log(`   EmployeeVesting.grants(${addr.substring(0, 10)}...).totalAmount = ${grantAmount}  (expected: ${expected}) ${ok ? "✓" : "✗"}`);
-                console.log(`   EmployeeVesting.vestingPoolBalance() = ${pool} (remaining)`);
-                console.log(`   EmployeeVesting.isEmployed(${addr.substring(0, 10)}...)  = ${grant[5] !== undefined ? "see grant" : "true (set by createGrant)"}`);
-                return { grantAmount, pool };
-            } catch (err) {
-                console.log(`   ⚠ Could not read EmployeeVesting.grants: ${err.message}`);
-                return null;
-            }
+            console.log("   ℹ SYNC_CREATE_GRANT is obsolete, testing SYNC_PRIVATE_DEPOSIT...");
+            return null;
         }
+
         case "SYNC_BATCH": {
             console.log("   ℹ Skipping detailed verification for SYNC_BATCH.");
             break;
@@ -398,7 +348,7 @@ const getTriggerIndex = (action, eventLogAddress) => {
     if (!eventLogAddress) return null;
     const addr = eventLogAddress.toLowerCase();
     if (addr === identityRegistryAddress) return "1";
-    if (addr === employeeVestingAddress) return "2";
+    if (addr === acePrivacyManagerAddress) return "2";
     // Token events: no log trigger registered in main.ts
     return null;
 };
@@ -454,7 +404,7 @@ const executeFullFlow = async (lambdaPayload, crePayload) => {
     // Step 4: CRE LogTrigger → sync event back to Lambda
     // Determine which log (if any) was emitted by a watched contract
     const tokenAddr = await resolveTokenAddress();
-    const watchedAddresses = [identityRegistryAddress, employeeVestingAddress];
+    const watchedAddresses = [identityRegistryAddress, acePrivacyManagerAddress];
 
     const eventLogIdx = receipt.logs.findIndex(
         (log) => watchedAddresses.includes(log.address.toLowerCase()),
@@ -710,7 +660,7 @@ const handleReadEmployee = async () => {
             publicClient.readContract({ address: identityRegistryAddress, abi: IDENTITY_REGISTRY_ABI, functionName: "isVerified", args: [employeeAddress] }),
             publicClient.readContract({ address: identityRegistryAddress, abi: IDENTITY_REGISTRY_ABI, functionName: "investorCountry", args: [employeeAddress] }),
         ]);
-        const isEmployed = await publicClient.readContract({ address: employeeVestingAddress, abi: EMPLOYEE_VESTING_ABI, functionName: "isEmployed", args: [employeeAddress] });
+        const isEmployed = "Off-chain";
         const tokenAddr = await resolveTokenAddress();
         let isFrozen = "N/A";
         if (tokenAddr) {
@@ -854,19 +804,10 @@ const handleBulkSequence = async () => {
             });
         }
 
-        if (emp.employed !== undefined) {
+        if (emp.privateDeposit) {
             batches.push({
-                action: "SYNC_EMPLOYMENT_STATUS",
-                employeeAddress: emp.employeeAddress,
-                employed: !!emp.employed
-            });
-        }
-
-        if (emp.goalId && emp.goalAchieved !== undefined) {
-            batches.push({
-                action: "SYNC_GOAL",
-                goalId: emp.goalId,
-                achieved: !!emp.goalAchieved
+                action: "SYNC_PRIVATE_DEPOSIT",
+                amount: BigInt(emp.privateDeposit.amount).toString()
             });
         }
 
@@ -878,16 +819,12 @@ const handleBulkSequence = async () => {
             });
         }
 
-        if (emp.grant) {
+        if (emp.ticketRedeemed) {
             batches.push({
-                action: "SYNC_CREATE_GRANT",
+                action: "SYNC_REDEEM_TICKET",
                 employeeAddress: emp.employeeAddress,
-                amount: BigInt(emp.grant.amount).toString(),
-                startTime: Math.floor(Date.now() / 1000),
-                cliffDuration: emp.grant.cliffMonths * 30 * 24 * 3600,
-                vestingDuration: emp.grant.vestingMonths * 30 * 24 * 3600,
-                isRevocable: !!emp.grant.isRevocable,
-                performanceGoalId: emp.goalId || ("0x" + "0".repeat(64))
+                amount: BigInt(emp.ticketRedeemed.amount).toString(),
+                ticket: "0x0000000000000000000000000000000000000000000000000000000000000000"
             });
         }
     }
@@ -922,7 +859,7 @@ const showMenu = () => {
     console.log("  CONTRACT ADDRESSES (Base Sepolia)");
     console.log(`  Receiver:       ${config.evms[0].receiverAddress}`);
     console.log(`  IdentityReg:    ${config.evms[0].identityRegistryAddress}`);
-    console.log(`  EmployeeVest:   ${config.evms[0].employeeVestingAddress}`);
+    console.log(`  PrivateEquity:  ${config.evms[0].acePrivacyManagerAddress}`);
     console.log(`  Token (ERC-3643): read from Receiver.token() on-chain`);
     console.log();
     console.log("  TRIGGER FLOW (main.ts):  0=HTTP  1=IdentityReg  2=EmployeeVest");

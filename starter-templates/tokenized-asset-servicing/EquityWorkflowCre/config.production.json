@@ -4,7 +4,8 @@
     {
       "receiverAddress": "0x83905819019A6DeeDFF834f08DeC8238e54EBf6e",
       "identityRegistryAddress": "0x31D26dE5f5a255D0748035D90Ec739840df55280",
-      "employeeVestingAddress": "0x78a40e81b6C7770B686D6D0812431422B2CC6dbb",
+      "acePrivacyManagerAddress": "0x78a40e81b6C7770B686D6D0812431422B2CC6dbb",
+      "aceVaultAddress": "0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13",
       "tokenAddress": "0x2a177f9498edAB038eBA5f094526f76118E2416F",
       "chainSelectorName": "ethereum-testnet-sepolia",
       "gasLimit": "1000000"

@@ -4,53 +4,55 @@ pragma solidity ^0.8.20;
 import "../interfaces/ReceiverTemplate.sol";
 import "./IIdentityRegistry.sol";
 import "./IERC3643.sol";
-import "./EmployeeVesting.sol";
+import "./PrivateEmployeeEquity.sol";
 
 /// @title EquityWorkflowReceiver
 /// @notice Receives CRE workflow reports and dispatches them to the Equity Protocol.
 ///
 ///  Action Types:
 ///    0 = SYNC_KYC              → IdentityRegistry
-///    1 = SYNC_EMPLOYMENT_STATUS → EmployeeVesting.updateEmploymentStatus()
-///    2 = SYNC_GOAL             → EmployeeVesting.setGoalAchieved()
+///    1 = SYNC_EMPLOYMENT_STATUS (no-op, handled off-chain)
+///    2 = SYNC_GOAL              (no-op, handled off-chain)
 ///    3 = SYNC_FREEZE_WALLET    → Token.setAddressFrozen()
-///    4 = SYNC_CREATE_GRANT     → EmployeeVesting.createGrant() [oracle]
+///    4 = SYNC_PRIVATE_DEPOSIT  → PrivateEmployeeEquity.depositToVault()
+///    5 = SYNC_BATCH            → process multiple
+///    6 = SYNC_REDEEM_TICKET    → PrivateEmployeeEquity.redeemTicket()
 ///
 /// @dev This contract must hold:
 ///   - Ownership of IdentityRegistry  (for registerIdentity / deleteIdentity / setCountry)
 ///   - Ownership of Token             (for setAddressFrozen)
-///   - Oracle rights on EmployeeVesting (for updateEmploymentStatus, setGoalAchieved, createGrant)
+///   - Oracle rights on PrivateEmployeeEquity (for private ACE transfers)
 contract EquityWorkflowReceiver is ReceiverTemplate {
     enum ActionType {
         SYNC_KYC,               // 0
-        SYNC_EMPLOYMENT_STATUS,  // 1
-        SYNC_GOAL,               // 2
-        SYNC_FREEZE_WALLET,      // 3
-        SYNC_CREATE_GRANT,       // 4
-        SYNC_BATCH               // 5
+        SYNC_EMPLOYMENT_STATUS, // 1
+        SYNC_GOAL,              // 2
+        SYNC_FREEZE_WALLET,     // 3
+        SYNC_PRIVATE_DEPOSIT,   // 4
+        SYNC_BATCH,             // 5
+        SYNC_REDEEM_TICKET      // 6
     }
 
     IIdentityRegistry public identityRegistry;
-    EmployeeVesting   public employeeVesting;
+    PrivateEmployeeEquity public privateEquity;
     IERC3643          public token;
 
     event SyncActionExecuted(ActionType indexed actionType, bytes payload);
     event TargetsUpdated(
         address indexed identityRegistry,
-        address indexed employeeVesting,
+        address indexed privateEquity,
         address indexed token
     );
 
-    error ZeroAddress();
     error UnsupportedAction(uint8 actionType);
 
     constructor(
         address _forwarderAddress,
         address _identityRegistry,
-        address _employeeVesting,
+        address _privateEquity,
         address _token
     ) ReceiverTemplate(_forwarderAddress) {
-        _setTargets(_identityRegistry, _employeeVesting, _token);
+        _setTargets(_identityRegistry, _privateEquity, _token);
     }
 
     // ──────────────────────────────────────────────────────
@@ -59,28 +61,28 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
 
     function setTargets(
         address _identityRegistry,
-        address _employeeVesting,
+        address _privateEquity,
         address _token
     ) external onlyOwner {
-        _setTargets(_identityRegistry, _employeeVesting, _token);
+        _setTargets(_identityRegistry, _privateEquity, _token);
     }
 
     function _setTargets(
         address _identityRegistry,
-        address _employeeVesting,
+        address _privateEquity,
         address _token
     ) internal {
         if (
             _identityRegistry == address(0) ||
-            _employeeVesting == address(0) ||
+            _privateEquity == address(0) ||
             _token == address(0)
         ) revert ZeroAddress();
 
         identityRegistry = IIdentityRegistry(_identityRegistry);
-        employeeVesting  = EmployeeVesting(_employeeVesting);
+        privateEquity    = PrivateEmployeeEquity(_privateEquity);
         token            = IERC3643(_token);
 
-        emit TargetsUpdated(_identityRegistry, _employeeVesting, _token);
+        emit TargetsUpdated(_identityRegistry, _privateEquity, _token);
     }
 
     // ──────────────────────────────────────────────────────
@@ -98,18 +100,20 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         if (actionType == ActionType.SYNC_KYC) {
             _processKycPayload(payload);
         } else if (actionType == ActionType.SYNC_EMPLOYMENT_STATUS) {
-            _processEmploymentPayload(payload);
+            // no-op
         } else if (actionType == ActionType.SYNC_GOAL) {
-            _processGoalPayload(payload);
+            // no-op
         } else if (actionType == ActionType.SYNC_FREEZE_WALLET) {
             _processFreezeWalletPayload(payload);
-        } else if (actionType == ActionType.SYNC_CREATE_GRANT) {
-            _processCreateGrantPayload(payload);
+        } else if (actionType == ActionType.SYNC_PRIVATE_DEPOSIT) {
+            _processPrivateDepositPayload(payload);
         } else if (actionType == ActionType.SYNC_BATCH) {
             bytes[] memory batches = abi.decode(payload, (bytes[]));
             for (uint256 i = 0; i < batches.length; i++) {
                 _processSingleReport(batches[i]);
             }
+        } else if (actionType == ActionType.SYNC_REDEEM_TICKET) {
+            _processRedeemTicketPayload(payload);
         } else {
             revert UnsupportedAction(rawActionType);
         }
@@ -139,43 +143,18 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         }
     }
 
-    function _processEmploymentPayload(bytes memory payload) internal {
-        (address employee, bool employed) = abi.decode(payload, (address, bool));
-        employeeVesting.updateEmploymentStatus(employee, employed);
-    }
-
-    function _processGoalPayload(bytes memory payload) internal {
-        (bytes32 goalId, bool achieved) = abi.decode(payload, (bytes32, bool));
-        employeeVesting.setGoalAchieved(goalId, achieved);
-    }
-
     function _processFreezeWalletPayload(bytes memory payload) internal {
         (address wallet, bool frozen) = abi.decode(payload, (address, bool));
         token.setAddressFrozen(wallet, frozen);
     }
 
-    /// @notice Creates a vesting grant via CRE.
-    ///         Requires EmployeeVesting to be pre-funded with sufficient tokens
-    ///         (owner calls EmployeeVesting.fundVesting() before this is used).
-    function _processCreateGrantPayload(bytes memory payload) internal {
-        (
-            address employee,
-            uint256 amount,
-            uint256 startTime,
-            uint256 cliffDuration,
-            uint256 vestingDuration,
-            bool    isRevocable,
-            bytes32 performanceGoalId
-        ) = abi.decode(payload, (address, uint256, uint256, uint256, uint256, bool, bytes32));
+    function _processPrivateDepositPayload(bytes memory payload) internal {
+        uint256 amount = abi.decode(payload, (uint256));
+        privateEquity.depositToVault(amount);
+    }
 
-        employeeVesting.createGrant(
-            employee,
-            amount,
-            startTime,
-            cliffDuration,
-            vestingDuration,
-            isRevocable,
-            performanceGoalId
-        );
+    function _processRedeemTicketPayload(bytes memory payload) internal {
+        (uint256 amount, bytes memory ticket) = abi.decode(payload, (uint256, bytes));
+        privateEquity.redeemTicket(amount, ticket);
     }
 }

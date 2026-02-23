@@ -23,9 +23,8 @@ const REQUIRED_FIELDS = {
   IdentityRemoved: ["employeeAddress"],
   CountryUpdated: ["employeeAddress", "country"],
   EmploymentStatusUpdated: ["employeeAddress", "employed"],
-  GrantCreated: ["employeeAddress", "amount"],
-  TokensClaimed: ["employeeAddress", "amount"],
-  GrantRevoked: ["employeeAddress", "amountForfeited"],
+  PrivateDeposit: ["amount"],
+  TicketRedeemed: ["employeeAddress", "amount"],
   GoalUpdated: ["goalId", "achieved"],
 };
 
@@ -38,11 +37,8 @@ const COMPANY_ALLOWED_FIELDS = [
   "goalId",
   "goalAchieved",
   "walletFrozen",
-  "vestingTotalAmount",
-  "vestingStartTime",
-  "cliffDuration",
-  "vestingDuration",
-  "isRevocable",
+  "privateDepositAmount",
+  "ticketRedeemAmount",
   "notes",
 ];
 
@@ -212,6 +208,23 @@ const buildSyncPayloadsFromCompanyInput = (params, employeeState) => {
       action: "SYNC_FREEZE_WALLET",
       walletAddress: employeeAddress,
       frozen: Boolean(employeeState.walletFrozen),
+    });
+  }
+
+  const shouldSyncDeposit = params.syncPrivateDeposit === true || params.privateDepositAmount !== undefined;
+  if (shouldSyncDeposit && employeeState.privateDepositAmount) {
+    payloads.push({
+      action: "SYNC_PRIVATE_DEPOSIT",
+      amount: String(employeeState.privateDepositAmount)
+    });
+  }
+
+  const shouldSyncTicket = params.syncRedeemTicket === true || params.ticketRedeemAmount !== undefined;
+  if (shouldSyncTicket && employeeState.ticketRedeemAmount) {
+    payloads.push({
+      action: "SYNC_REDEEM_TICKET",
+      employeeAddress,
+      amount: String(employeeState.ticketRedeemAmount)
     });
   }
 
@@ -388,18 +401,22 @@ const handlers = {
     return { message: "Employment status synced from onchain", data: updated };
   },
 
-  GrantCreated: async (client, { employeeAddress, amount }) => {
-    const recordId = employeeRecordId(employeeAddress);
+  PrivateDeposit: async (client, { amount }) => {
+    const recordId = "vault:main";
+    const current = (await getRecord(client, recordId)) || {};
+    const totalDeposited = parseBigInt(current.totalDeposited || "0") + parseBigInt(amount);
+
     const updated = await upsertRecord(client, recordId, {
-      entityType: "employee",
-      employeeAddress: normalizeAddress(employeeAddress),
-      grantTotalAmount: String(amount),
-      lastOnchainEvent: "GrantCreated",
+      ...current,
+      entityType: "vault",
+      totalDeposited: totalDeposited.toString(),
+      lastDepositAmount: String(amount),
+      lastOnchainEvent: "PrivateDeposit",
     });
-    return { message: "GrantCreated synced from onchain", data: updated };
+    return { message: "PrivateDeposit synced from onchain", data: updated };
   },
 
-  TokensClaimed: async (client, { employeeAddress, amount }) => {
+  TicketRedeemed: async (client, { employeeAddress, amount }) => {
     const recordId = employeeRecordId(employeeAddress);
     const current = (await getRecord(client, recordId)) || {};
     const claimedBefore = parseBigInt(current.claimedAmount || "0");
@@ -411,22 +428,10 @@ const handlers = {
       employeeAddress: normalizeAddress(employeeAddress),
       claimedAmount: claimedAfter.toString(),
       lastClaimedAmount: String(amount),
-      lastOnchainEvent: "TokensClaimed",
+      lastOnchainEvent: "TicketRedeemed",
     });
 
-    return { message: "TokensClaimed synced from onchain", data: updated };
-  },
-
-  GrantRevoked: async (client, { employeeAddress, amountForfeited }) => {
-    const recordId = employeeRecordId(employeeAddress);
-    const updated = await upsertRecord(client, recordId, {
-      entityType: "employee",
-      employeeAddress: normalizeAddress(employeeAddress),
-      employed: false,
-      lastRevokedAmount: String(amountForfeited),
-      lastOnchainEvent: "GrantRevoked",
-    });
-    return { message: "GrantRevoked synced from onchain", data: updated };
+    return { message: "TicketRedeemed synced from onchain", data: updated };
   },
 
   GoalUpdated: async (client, { goalId, achieved }) => {

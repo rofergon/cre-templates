@@ -28,12 +28,14 @@ const configSchema = z.object({
       z.object({
         receiverAddress: z.string(),
         identityRegistryAddress: z.string(),
-        employeeVestingAddress: z.string(),
+        acePrivacyManagerAddress: z.string(),
+        aceVaultAddress: z.string(),
         chainSelectorName: z.string(),
         gasLimit: z.string(),
       }),
     )
     .min(1),
+  aceApiUrl: z.string().optional(),
 });
 
 type Config = z.infer<typeof configSchema>;
@@ -49,43 +51,28 @@ const syncKycSchema = z.object({
   country: z.coerce.number().int().min(0).max(65535).optional(),
 });
 
-const syncEmploymentSchema = z.object({
-  action: z.literal("SYNC_EMPLOYMENT_STATUS"),
-  employeeAddress: addressSchema,
-  employed: z.boolean(),
-});
-
-const syncGoalSchema = z.object({
-  action: z.literal("SYNC_GOAL"),
-  goalId: bytes32Schema,
-  achieved: z.boolean(),
-});
-
 const syncFreezeWalletSchema = z.object({
   action: z.literal("SYNC_FREEZE_WALLET"),
   walletAddress: addressSchema,
   frozen: z.boolean(),
 });
 
-// SYNC_CREATE_GRANT: creates an on-chain vesting grant via CRE.
-// Requires EmployeeVesting to be pre-funded via fundVesting() first.
-const syncCreateGrantSchema = z.object({
-  action: z.literal("SYNC_CREATE_GRANT"),
-  employeeAddress: addressSchema,
-  amount: z.coerce.bigint().positive(),            // token amount (wei / smallest unit)
-  startTime: z.coerce.number().int().positive(),   // unix timestamp
-  cliffDuration: z.coerce.number().int().min(0),   // seconds
-  vestingDuration: z.coerce.number().int().positive(), // seconds
-  isRevocable: z.boolean(),
-  performanceGoalId: bytes32Schema.optional(),     // 0x000...0 = no condition
+const syncPrivateDepositSchema = z.object({
+  action: z.literal("SYNC_PRIVATE_DEPOSIT"),
+  amount: z.coerce.bigint().positive(),
+});
+
+const syncRedeemTicketSchema = z.object({
+  action: z.literal("SYNC_REDEEM_TICKET"),
+  amount: z.coerce.bigint().positive(),
+  ticket: z.string(),
 });
 
 const baseSyncInputSchema = z.discriminatedUnion("action", [
   syncKycSchema,
-  syncEmploymentSchema,
-  syncGoalSchema,
   syncFreezeWalletSchema,
-  syncCreateGrantSchema,
+  syncPrivateDepositSchema,
+  syncRedeemTicketSchema,
 ]);
 
 const syncBatchSchema = z.object({
@@ -95,10 +82,9 @@ const syncBatchSchema = z.object({
 
 const syncInputSchema = z.discriminatedUnion("action", [
   syncKycSchema,
-  syncEmploymentSchema,
-  syncGoalSchema,
   syncFreezeWalletSchema,
-  syncCreateGrantSchema,
+  syncPrivateDepositSchema,
+  syncRedeemTicketSchema,
   syncBatchSchema,
 ]);
 
@@ -110,11 +96,12 @@ type PostResponse = {
 
 const ACTION_TYPE = {
   SYNC_KYC: 0,
-  SYNC_EMPLOYMENT_STATUS: 1,
-  SYNC_GOAL: 2,
+  SYNC_EMPLOYMENT_STATUS: 1, // no-op
+  SYNC_GOAL: 2,              // no-op
   SYNC_FREEZE_WALLET: 3,
-  SYNC_CREATE_GRANT: 4,
+  SYNC_PRIVATE_DEPOSIT: 4,
   SYNC_BATCH: 5,
+  SYNC_REDEEM_TICKET: 6,
 } as const;
 
 const safeJsonStringify = (obj: unknown): string =>
@@ -128,11 +115,8 @@ const eventAbi = parseAbi([
   "event IdentityRegistered(address indexed userAddress, address indexed identity, uint16 country)",
   "event IdentityRemoved(address indexed userAddress, address indexed identity)",
   "event CountryUpdated(address indexed userAddress, uint16 country)",
-  "event GrantCreated(address indexed employee, uint256 amount)",
-  "event TokensClaimed(address indexed employee, uint256 amount)",
-  "event EmploymentStatusUpdated(address indexed employee, bool status)",
-  "event GoalUpdated(bytes32 indexed goalId, bool achieved)",
-  "event GrantRevoked(address indexed employee, uint256 amountForfeited)",
+  "event PrivateDeposit(uint256 amount)",
+  "event TicketRedeemed(address indexed redeemer, uint256 amount)",
 ]);
 
 const postData = (
@@ -182,62 +166,37 @@ const buildInstruction = (input: SyncInput): { actionType: number; payload: `0x$
 
       return { actionType: ACTION_TYPE.SYNC_KYC, payload };
     }
-    case "SYNC_EMPLOYMENT_STATUS": {
-      const payload = encodeAbiParameters(
-        parseAbiParameters("address employee, bool employed"),
-        [getAddress(input.employeeAddress), input.employed],
-      );
-
-      return {
-        actionType: ACTION_TYPE.SYNC_EMPLOYMENT_STATUS,
-        payload,
-      };
-    }
-    case "SYNC_GOAL": {
-      const payload = encodeAbiParameters(
-        parseAbiParameters("bytes32 goalId, bool achieved"),
-        [input.goalId as `0x${string}`, input.achieved],
-      );
-
-      return { actionType: ACTION_TYPE.SYNC_GOAL, payload };
-    }
     case "SYNC_FREEZE_WALLET": {
       const payload = encodeAbiParameters(
-        parseAbiParameters("address wallet, bool frozen"),
-        [getAddress(input.walletAddress), input.frozen],
+        parseAbiParameters("address walletAddress, bool frozen"),
+        [getAddress(input.walletAddress), input.frozen]
+      );
+      return { actionType: ACTION_TYPE.SYNC_FREEZE_WALLET, payload };
+    }
+    case "SYNC_PRIVATE_DEPOSIT": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("uint256 amount"),
+        [input.amount]
       );
 
       return {
-        actionType: ACTION_TYPE.SYNC_FREEZE_WALLET,
+        actionType: ACTION_TYPE.SYNC_PRIVATE_DEPOSIT,
         payload,
       };
     }
-    case "SYNC_CREATE_GRANT": {
-      const ZERO_GOAL = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
-      const performanceGoalId = (input.performanceGoalId ?? ZERO_GOAL) as `0x${string}`;
-
+    case "SYNC_REDEEM_TICKET": {
       const payload = encodeAbiParameters(
-        parseAbiParameters(
-          "address employee, uint256 amount, uint256 startTime, uint256 cliffDuration, uint256 vestingDuration, bool isRevocable, bytes32 performanceGoalId"
-        ),
-        [
-          getAddress(input.employeeAddress),
-          input.amount,
-          BigInt(input.startTime),
-          BigInt(input.cliffDuration),
-          BigInt(input.vestingDuration),
-          input.isRevocable,
-          performanceGoalId,
-        ],
+        parseAbiParameters("uint256 amount, bytes ticket"),
+        [input.amount, input.ticket as `0x${string}`]
       );
 
       return {
-        actionType: ACTION_TYPE.SYNC_CREATE_GRANT,
+        actionType: ACTION_TYPE.SYNC_REDEEM_TICKET,
         payload,
       };
     }
     case "SYNC_BATCH": {
-      const payloads = input.batches.map(batch => buildInstruction(batch).payload);
+      const payloads = input.batches.map((batch: unknown) => buildInstruction(batch as SyncInput).payload);
       const payload = encodeAbiParameters(
         parseAbiParameters("bytes[] batches"),
         [payloads],
@@ -340,35 +299,16 @@ const buildLambdaPayloadFromLog = (
         employeeAddress: String(args.userAddress),
         country: Number(args.country),
       };
-    case "GrantCreated":
+    case "PrivateDeposit":
       return {
-        action: "GrantCreated",
-        employeeAddress: String(args.employee),
+        action: "PrivateDeposit",
         amount: String(args.amount),
       };
-    case "TokensClaimed":
+    case "TicketRedeemed":
       return {
-        action: "TokensClaimed",
-        employeeAddress: String(args.employee),
+        action: "TicketRedeemed",
+        employeeAddress: String(args.redeemer),
         amount: String(args.amount),
-      };
-    case "EmploymentStatusUpdated":
-      return {
-        action: "EmploymentStatusUpdated",
-        employeeAddress: String(args.employee),
-        employed: Boolean(args.status),
-      };
-    case "GoalUpdated":
-      return {
-        action: "GoalUpdated",
-        goalId: String(args.goalId),
-        achieved: Boolean(args.achieved),
-      };
-    case "GrantRevoked":
-      return {
-        action: "GrantRevoked",
-        employeeAddress: String(args.employee),
-        amountForfeited: String(args.amountForfeited),
       };
     default:
       return null;
@@ -457,7 +397,7 @@ const initWorkflow = (config: Config) => {
     ),
     cre.handler(
       evmClient.logTrigger({
-        addresses: [hexToBase64(evmConfig.employeeVestingAddress)],
+        addresses: [hexToBase64(evmConfig.acePrivacyManagerAddress)],
       }),
       onLogTrigger,
     ),
