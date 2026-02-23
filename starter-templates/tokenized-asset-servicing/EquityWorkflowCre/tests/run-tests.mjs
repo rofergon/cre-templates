@@ -5,9 +5,9 @@
  * Tests the full 3-tier flow: Lambda → CRE → Blockchain → CRE → Lambda
  *
  * Protocol contracts (Sepolia):
- *   Receiver         : 0x83905819019A6DeeDFF834f08DeC8238e54EBf6e
- *   IdentityRegistry : 0x31D26dE5f5a255D0748035D90Ec739840df55280
- *   PrivateEquity    : 0x78a40e81b6C7770B686D6D0812431422B2CC6dbb
+ *   Receiver         : 0xc1bE94A4639746F79d0A2bc65a82c0bf938B531a
+ *   IdentityRegistry : 0x3DEd337A401E234d40Cf2A54D9291BF61692Ca07
+ *   PrivateEquity    : 0xf94Df607d817e18B65985ADc94d6A0F1b1C7De99
  *   Token (ERC-3643) : read from Receiver.token()
  *
  * Trigger-index mapping (main.ts):
