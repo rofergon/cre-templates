@@ -12,14 +12,32 @@ error ZeroAddress();
 /// @notice Replaces EmployeeVesting by managing interactions with the Chainlink ACE Vault
 ///         for private token transfers.
 contract PrivateEmployeeEquity is Ownable {
+    struct ClaimRequirements {
+        uint64 cliffEndTimestamp;
+        bytes32 goalId;
+        bool goalRequired;
+        bool initialized;
+    }
+
     IVault public vault;
     IERC20 public token;
 
     mapping(address => bool) public oracles;
+    mapping(address => bool) public employmentStatus;
+    mapping(bytes32 => bool) public goalsAchieved;
+    mapping(address => ClaimRequirements) public claimRequirements;
 
     event OracleStatusUpdated(address indexed oracle, bool isAuthorized);
     event PrivateDeposit(uint256 amount);
     event TicketRedeemed(address indexed redeemer, uint256 amount);
+    event EmploymentStatusUpdated(address indexed employee, bool employed);
+    event GoalUpdated(bytes32 indexed goalId, bool achieved);
+    event ClaimRequirementsUpdated(
+        address indexed employee,
+        uint64 cliffEndTimestamp,
+        bytes32 indexed goalId,
+        bool goalRequired
+    );
 
     modifier onlyOracle() {
         if (!oracles[msg.sender] && msg.sender != owner()) revert NotAnOracle();
@@ -39,6 +57,49 @@ contract PrivateEmployeeEquity is Ownable {
         if (_oracle == address(0)) revert ZeroAddress();
         oracles[_oracle] = _isAuthorized;
         emit OracleStatusUpdated(_oracle, _isAuthorized);
+    }
+
+    /// @notice Updates employment status for vesting-style compliance gating.
+    function updateEmploymentStatus(address employee, bool employed) external onlyOracle {
+        if (employee == address(0)) revert ZeroAddress();
+        employmentStatus[employee] = employed;
+        emit EmploymentStatusUpdated(employee, employed);
+    }
+
+    /// @notice Updates a performance goal status used by claim requirements.
+    function setGoalAchieved(bytes32 goalId, bool achieved) external onlyOracle {
+        goalsAchieved[goalId] = achieved;
+        emit GoalUpdated(goalId, achieved);
+    }
+
+    /// @notice Sets cliff + goal requirements for an employee before allowing claim flow.
+    function setClaimRequirements(
+        address employee,
+        uint64 cliffEndTimestamp,
+        bytes32 goalId,
+        bool goalRequired
+    ) external onlyOracle {
+        if (employee == address(0)) revert ZeroAddress();
+        claimRequirements[employee] = ClaimRequirements({
+            cliffEndTimestamp: cliffEndTimestamp,
+            goalId: goalId,
+            goalRequired: goalRequired,
+            initialized: true
+        });
+        emit ClaimRequirementsUpdated(employee, cliffEndTimestamp, goalId, goalRequired);
+    }
+
+    /// @notice Returns whether an employee currently satisfies configured claim requirements.
+    /// @dev If no requirements were configured for the employee, this returns true.
+    function isEmployeeEligible(address employee) public view returns (bool) {
+        ClaimRequirements memory req = claimRequirements[employee];
+        if (!req.initialized) return true;
+
+        if (!employmentStatus[employee]) return false;
+        if (block.timestamp < req.cliffEndTimestamp) return false;
+        if (req.goalRequired && !goalsAchieved[req.goalId]) return false;
+
+        return true;
     }
 
     /// @notice Deposits tokens into the ACE Vault, losing public on-chain visibility
