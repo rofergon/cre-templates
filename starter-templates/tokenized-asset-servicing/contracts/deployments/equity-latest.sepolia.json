@@ -1,0 +1,16 @@
+{
+  "deployedAt": "2026-02-24T17:43:38.225Z",
+  "network": "sepolia",
+  "deployer": "0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38",
+  "testModeForwarderBypass": true,
+  "creForwarderAddress": "0x82300bd7c3958625581cc2f77bc6464dcecdf3e5",
+  "aceVaultAddress": "0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13",
+  "contracts": {
+    "receiverAddress": "0x677Fb566538E7A7bB6C7a0bc5053b14b4fEa7306",
+    "identityRegistryAddress": "0x1f82FdeDf1486306fF1a0FB394d628e30338d478",
+    "complianceAddress": "0x85970f19C7b49C4521C432ad2704D00edBA08D1C",
+    "tokenAddress": "0x5C7165B57678613744D6f38ceb51c0163cB8534A",
+    "privateEquityAddress": "0xf92757eb7ee100F387290745B044cD0616669fC2",
+    "acePolicyEngineAddress": "0xF08fC032DE7bbe0e65aDB3B27dA2028D9C7762Cd"
+  }
+}
