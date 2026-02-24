@@ -6,7 +6,8 @@
         "balances": "tsx src/balances.ts",
         "shielded-address": "tsx src/shielded-address.ts",
         "private-transfer": "tsx src/private-transfer.ts",
-        "withdraw": "tsx src/withdraw.ts"
+        "withdraw": "tsx src/withdraw.ts",
+        "withdraw-and-redeem": "tsx src/withdraw-and-redeem.ts"
     },
     "dependencies": {
         "ethers": "^6.10.0"

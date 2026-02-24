@@ -820,12 +820,9 @@ const handleBulkSequence = async () => {
         }
 
         if (emp.ticketRedeemed) {
-            batches.push({
-                action: "SYNC_REDEEM_TICKET",
-                employeeAddress: emp.employeeAddress,
-                amount: BigInt(emp.ticketRedeemed.amount).toString(),
-                ticket: "0x0000000000000000000000000000000000000000000000000000000000000000"
-            });
+            console.log(
+                `   ℹ Skipping ticket redeem for ${emp.employeeAddress}: SYNC_REDEEM_TICKET is disabled in phase 1.`
+            );
         }
     }
 

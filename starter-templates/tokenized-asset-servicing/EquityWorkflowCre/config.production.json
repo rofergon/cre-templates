@@ -1,11 +1,13 @@
 {
   "url": "https://bxxeayal5jz6m4mo5j6xyobs5e0ytvap.lambda-url.us-east-2.on.aws/",
+  "aceApiUrl": "https://convergence2026-token-api.cldev.cloud",
   "evms": [
     {
       "receiverAddress": "0xc1bE94A4639746F79d0A2bc65a82c0bf938B531a",
       "identityRegistryAddress": "0x3DEd337A401E234d40Cf2A54D9291BF61692Ca07",
       "acePrivacyManagerAddress": "0xf94Df607d817e18B65985ADc94d6A0F1b1C7De99",
       "aceVaultAddress": "0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13",
+      "aceChainId": 11155111,
       "tokenAddress": "0xA4f742f0b0ceC1099c4F4Ca90Cb049869C41CD0C",
       "chainSelectorName": "ethereum-testnet-sepolia",
       "gasLimit": "1000000"

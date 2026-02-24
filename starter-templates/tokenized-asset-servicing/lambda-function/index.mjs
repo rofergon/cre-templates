@@ -221,11 +221,9 @@ const buildSyncPayloadsFromCompanyInput = (params, employeeState) => {
 
   const shouldSyncTicket = params.syncRedeemTicket === true || params.ticketRedeemAmount !== undefined;
   if (shouldSyncTicket && employeeState.ticketRedeemAmount) {
-    payloads.push({
-      action: "SYNC_REDEEM_TICKET",
-      employeeAddress,
-      amount: String(employeeState.ticketRedeemAmount)
-    });
+    throw new Error(
+      "SYNC_REDEEM_TICKET is disabled. Use ACE_WITHDRAW_TICKET from CRE and redeem with withdrawWithTicket() from the employee wallet.",
+    );
   }
 
   if (Array.isArray(params.extraSyncPayloads)) {

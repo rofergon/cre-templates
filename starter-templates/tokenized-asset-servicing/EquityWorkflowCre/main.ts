@@ -7,11 +7,14 @@ import {
   type HTTPPayload,
   type HTTPSendRequester,
   hexToBase64,
+  json as jsonBody,
   ok,
   Runner,
+  text as textBody,
   type Runtime,
   TxStatus,
 } from "@chainlink/cre-sdk";
+import { privateKeyToAccount } from "viem/accounts";
 import {
   decodeEventLog,
   encodeAbiParameters,
@@ -30,6 +33,7 @@ const configSchema = z.object({
         identityRegistryAddress: z.string(),
         acePrivacyManagerAddress: z.string(),
         aceVaultAddress: z.string(),
+        aceChainId: z.coerce.number().int().positive().optional(),
         chainSelectorName: z.string(),
         gasLimit: z.string(),
       }),
@@ -42,6 +46,7 @@ type Config = z.infer<typeof configSchema>;
 
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 const bytes32Schema = z.string().regex(/^0x[a-fA-F0-9]{64}$/);
+const timestampSchema = z.coerce.number().int().positive();
 
 const syncKycSchema = z.object({
   action: z.literal("SYNC_KYC"),
@@ -68,7 +73,31 @@ const syncRedeemTicketSchema = z.object({
   ticket: z.string(),
 });
 
-const baseSyncInputSchema = z.discriminatedUnion("action", [
+const aceGenerateShieldedAddressSchema = z.object({
+  action: z.literal("ACE_GENERATE_SHIELDED_ADDRESS"),
+  account: addressSchema.optional(),
+  timestamp: timestampSchema,
+});
+
+const acePrivateTransferSchema = z.object({
+  action: z.literal("ACE_PRIVATE_TRANSFER"),
+  account: addressSchema.optional(),
+  recipient: addressSchema,
+  token: addressSchema,
+  amount: z.coerce.bigint().positive(),
+  flags: z.array(z.string()).optional(),
+  timestamp: timestampSchema,
+});
+
+const aceWithdrawTicketSchema = z.object({
+  action: z.literal("ACE_WITHDRAW_TICKET"),
+  account: addressSchema.optional(),
+  token: addressSchema,
+  amount: z.coerce.bigint().positive(),
+  timestamp: timestampSchema,
+});
+
+const onchainBaseSyncInputSchema = z.discriminatedUnion("action", [
   syncKycSchema,
   syncFreezeWalletSchema,
   syncPrivateDepositSchema,
@@ -77,10 +106,10 @@ const baseSyncInputSchema = z.discriminatedUnion("action", [
 
 const syncBatchSchema = z.object({
   action: z.literal("SYNC_BATCH"),
-  batches: z.array(baseSyncInputSchema),
+  batches: z.array(onchainBaseSyncInputSchema),
 });
 
-const syncInputSchema = z.discriminatedUnion("action", [
+const onchainSyncInputSchema = z.discriminatedUnion("action", [
   syncKycSchema,
   syncFreezeWalletSchema,
   syncPrivateDepositSchema,
@@ -88,10 +117,25 @@ const syncInputSchema = z.discriminatedUnion("action", [
   syncBatchSchema,
 ]);
 
+const aceSyncInputSchema = z.discriminatedUnion("action", [
+  aceGenerateShieldedAddressSchema,
+  acePrivateTransferSchema,
+  aceWithdrawTicketSchema,
+]);
+
+const syncInputSchema = z.union([onchainSyncInputSchema, aceSyncInputSchema]);
+
 type SyncInput = z.infer<typeof syncInputSchema>;
+type OnchainSyncInput = z.infer<typeof onchainSyncInputSchema>;
+type AceSyncInput = z.infer<typeof aceSyncInputSchema>;
 
 type PostResponse = {
   statusCode: number;
+};
+
+type PostResponseWithBody = {
+  statusCode: number;
+  body: string;
 };
 
 const ACTION_TYPE = {
@@ -102,6 +146,37 @@ const ACTION_TYPE = {
   SYNC_PRIVATE_DEPOSIT: 4,
   SYNC_BATCH: 5,
   SYNC_REDEEM_TICKET: 6,
+} as const;
+
+const DEFAULT_ACE_API_URL = "https://convergence2026-token-api.cldev.cloud";
+const DEFAULT_ACE_CHAIN_ID = 11155111;
+const ACE_EIP712_DOMAIN_NAME = "CompliantPrivateTokenDemo";
+const ACE_EIP712_DOMAIN_VERSION = "0.0.1";
+const ACE_SIGNER_SECRET_IDS = [
+  "ACE_API_SIGNER_PRIVATE_KEY",
+  "ACE_API_PRIVATE_KEY",
+  "PRIVATE_KEY",
+] as const;
+
+const EIP712_TYPES = {
+  "Generate Shielded Address": [
+    { name: "account", type: "address" },
+    { name: "timestamp", type: "uint256" },
+  ],
+  "Private Token Transfer": [
+    { name: "sender", type: "address" },
+    { name: "recipient", type: "address" },
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "flags", type: "string[]" },
+    { name: "timestamp", type: "uint256" },
+  ],
+  "Withdraw Tokens": [
+    { name: "account", type: "address" },
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "timestamp", type: "uint256" },
+  ],
 } as const;
 
 const safeJsonStringify = (obj: unknown): string =>
@@ -119,16 +194,73 @@ const eventAbi = parseAbi([
   "event TicketRedeemed(address indexed redeemer, uint256 amount)",
 ]);
 
-const postData = (
-  sendRequester: HTTPSendRequester,
-  lambdaUrl: string,
-  lambdaPayload: Record<string, string | number | boolean>,
-): PostResponse => {
-  const bodyBytes = new TextEncoder().encode(JSON.stringify(lambdaPayload));
-  const body = Buffer.from(bodyBytes).toString("base64");
+const normalizePrivateKey = (privateKey: string): `0x${string}` => {
+  const trimmed = privateKey.trim();
+  if (/^0x[a-fA-F0-9]{64}$/.test(trimmed)) return trimmed as `0x${string}`;
+  if (/^[a-fA-F0-9]{64}$/.test(trimmed)) return `0x${trimmed}` as `0x${string}`;
+  throw new Error("ACE signer private key is not a valid 32-byte hex key");
+};
 
+const resolveAceApiBaseUrl = (runtime: Runtime<Config>): string => {
+  const url = runtime.config.aceApiUrl ?? DEFAULT_ACE_API_URL;
+  return url.endsWith("/") ? url.slice(0, -1) : url;
+};
+
+const resolveAceDomain = (runtime: Runtime<Config>) => {
+  const evmConfig = runtime.config.evms[0];
+  return {
+    name: ACE_EIP712_DOMAIN_NAME,
+    version: ACE_EIP712_DOMAIN_VERSION,
+    chainId: evmConfig.aceChainId ?? DEFAULT_ACE_CHAIN_ID,
+    verifyingContract: getAddress(evmConfig.aceVaultAddress),
+  } as const;
+};
+
+const resolveAceSignerAccount = (
+  runtime: Runtime<Config>,
+  requestedAccount?: string,
+) => {
+  let normalizedPrivateKey: `0x${string}` | null = null;
+  for (const secretId of ACE_SIGNER_SECRET_IDS) {
+    try {
+      const secret = runtime.getSecret({ id: secretId }).result().value;
+      if (secret && secret.trim().length > 0) {
+        normalizedPrivateKey = normalizePrivateKey(secret);
+        break;
+      }
+    } catch {
+      // Continue looking for the next secret ID
+    }
+  }
+
+  if (!normalizedPrivateKey) {
+    throw new Error(
+      `ACE signer private key not found. Configure one of these secrets: ${ACE_SIGNER_SECRET_IDS.join(", ")}`,
+    );
+  }
+
+  const signer = privateKeyToAccount(normalizedPrivateKey);
+  if (requestedAccount) {
+    const expectedAccount = getAddress(requestedAccount);
+    const signerAccount = getAddress(signer.address);
+    if (expectedAccount !== signerAccount) {
+      throw new Error(
+        `Requested ACE account ${expectedAccount} does not match signer account ${signerAccount}`,
+      );
+    }
+  }
+  return signer;
+};
+
+const postDataWithBody = (
+  sendRequester: HTTPSendRequester,
+  url: string,
+  payload: Record<string, unknown>,
+): PostResponseWithBody => {
+  const bodyBytes = new TextEncoder().encode(JSON.stringify(payload));
+  const body = Buffer.from(bodyBytes).toString("base64");
   const req = {
-    url: lambdaUrl,
+    url,
     method: "POST" as const,
     body,
     headers: {
@@ -141,14 +273,40 @@ const postData = (
   };
 
   const resp = sendRequester.sendRequest(req).result();
+  const responseBody = (() => {
+    try {
+      return safeJsonStringify(jsonBody(resp));
+    } catch {
+      return textBody(resp);
+    }
+  })();
+
   if (!ok(resp)) {
-    throw new Error(`HTTP request to Lambda failed with status ${resp.statusCode}`);
+    throw new Error(`HTTP request to ${url} failed with status ${resp.statusCode}: ${responseBody}`);
   }
 
+  return { statusCode: resp.statusCode, body: responseBody };
+};
+
+const postData = (
+  sendRequester: HTTPSendRequester,
+  lambdaUrl: string,
+  lambdaPayload: Record<string, string | number | boolean>,
+): PostResponse => {
+  const resp = postDataWithBody(sendRequester, lambdaUrl, lambdaPayload);
   return { statusCode: resp.statusCode };
 };
 
-const buildInstruction = (input: SyncInput): { actionType: number; payload: `0x${string}` } => {
+const isAceSyncInput = (input: SyncInput): input is AceSyncInput =>
+  input.action.startsWith("ACE_");
+
+const encodeActionReport = (instruction: { actionType: number; payload: `0x${string}` }): `0x${string}` =>
+  encodeAbiParameters(
+    parseAbiParameters("uint8 actionType, bytes payload"),
+    [instruction.actionType, instruction.payload],
+  );
+
+const buildInstruction = (input: OnchainSyncInput): { actionType: number; payload: `0x${string}` } => {
   switch (input.action) {
     case "SYNC_KYC": {
       if (input.verified && !input.identityAddress) {
@@ -196,7 +354,7 @@ const buildInstruction = (input: SyncInput): { actionType: number; payload: `0x$
       };
     }
     case "SYNC_BATCH": {
-      const payloads = input.batches.map((batch: unknown) => buildInstruction(batch as SyncInput).payload);
+      const payloads = input.batches.map((batch) => encodeActionReport(buildInstruction(batch)));
       const payload = encodeAbiParameters(
         parseAbiParameters("bytes[] batches"),
         [payloads],
@@ -218,11 +376,7 @@ const submitInstruction = (
   instruction: { actionType: number; payload: `0x${string}` },
 ): string => {
   const evmConfig = runtime.config.evms[0];
-
-  const reportData = encodeAbiParameters(
-    parseAbiParameters("uint8 actionType, bytes payload"),
-    [instruction.actionType, instruction.payload],
-  );
+  const reportData = encodeActionReport(instruction);
 
   runtime.log(`Submitting instruction actionType=${instruction.actionType}`);
 
@@ -252,6 +406,113 @@ const submitInstruction = (
   const txHashHex = bytesToHex(resp.txHash || new Uint8Array(32));
   runtime.log(`writeReport succeeded: ${txHashHex}`);
   return txHashHex;
+};
+
+const executeAceAction = async (
+  runtime: Runtime<Config>,
+  input: AceSyncInput,
+): Promise<string> => {
+  const httpClient = new cre.capabilities.HTTPClient();
+  const baseUrl = resolveAceApiBaseUrl(runtime);
+  const domain = resolveAceDomain(runtime);
+  const signer = resolveAceSignerAccount(runtime, input.account);
+
+  if (input.action === "ACE_GENERATE_SHIELDED_ADDRESS") {
+    const account = getAddress(input.account ?? signer.address);
+    const typedTimestamp = BigInt(input.timestamp);
+    const message = {
+      account,
+      timestamp: typedTimestamp,
+    };
+    const auth = await signer.signTypedData({
+      domain,
+      primaryType: "Generate Shielded Address",
+      types: {
+        "Generate Shielded Address": EIP712_TYPES["Generate Shielded Address"],
+      },
+      message,
+    });
+    const response = httpClient
+      .sendRequest(runtime, postDataWithBody, consensusIdenticalAggregation<PostResponseWithBody>())(
+        `${baseUrl}/shielded-address`,
+        { account, timestamp: input.timestamp, auth },
+      )
+      .result();
+
+    runtime.log(`ACE /shielded-address response: ${response.body}`);
+    return `${input.action}:${response.statusCode}`;
+  }
+
+  if (input.action === "ACE_PRIVATE_TRANSFER") {
+    const sender = getAddress(input.account ?? signer.address);
+    const flags = input.flags ?? [];
+    const typedTimestamp = BigInt(input.timestamp);
+    const message = {
+      sender,
+      recipient: getAddress(input.recipient),
+      token: getAddress(input.token),
+      amount: input.amount,
+      flags,
+      timestamp: typedTimestamp,
+    };
+    const auth = await signer.signTypedData({
+      domain,
+      primaryType: "Private Token Transfer",
+      types: {
+        "Private Token Transfer": EIP712_TYPES["Private Token Transfer"],
+      },
+      message,
+    });
+    const response = httpClient
+      .sendRequest(runtime, postDataWithBody, consensusIdenticalAggregation<PostResponseWithBody>())(
+        `${baseUrl}/private-transfer`,
+        {
+          account: sender,
+          recipient: message.recipient,
+          token: message.token,
+          amount: input.amount.toString(),
+          flags,
+          timestamp: input.timestamp,
+          auth,
+        },
+      )
+      .result();
+
+    runtime.log(`ACE /private-transfer response: ${response.body}`);
+    return `${input.action}:${response.statusCode}`;
+  }
+
+  const account = getAddress(input.account ?? signer.address);
+  const typedTimestamp = BigInt(input.timestamp);
+  const message = {
+    account,
+    token: getAddress(input.token),
+    amount: input.amount,
+    timestamp: typedTimestamp,
+  };
+  const auth = await signer.signTypedData({
+    domain,
+    primaryType: "Withdraw Tokens",
+    types: {
+      "Withdraw Tokens": EIP712_TYPES["Withdraw Tokens"],
+    },
+    message,
+  });
+  const response = httpClient
+    .sendRequest(runtime, postDataWithBody, consensusIdenticalAggregation<PostResponseWithBody>())(
+      `${baseUrl}/withdraw`,
+      {
+        account,
+        token: message.token,
+        amount: input.amount.toString(),
+        timestamp: input.timestamp,
+        auth,
+      },
+    )
+    .result();
+
+  runtime.log(`ACE /withdraw response: ${response.body}`);
+  return `${input.action}:${response.statusCode}`;
 };
 
 const buildLambdaPayloadFromLog = (
@@ -315,11 +576,11 @@ const buildLambdaPayloadFromLog = (
   }
 };
 
-const onHTTPTrigger = (
+const onHTTPTrigger = async (
   runtime: Runtime<Config>,
   evmClient: InstanceType<typeof cre.capabilities.EVMClient>,
   payload: HTTPPayload,
-): string => {
+): Promise<string> => {
   if (!payload.input || payload.input.length === 0) {
     throw new Error("HTTP trigger payload is empty");
   }
@@ -336,6 +597,16 @@ const onHTTPTrigger = (
 
   const syncInput = syncInputSchema.parse(parsedPayload);
   runtime.log(`Parsed sync action: ${safeJsonStringify(syncInput)}`);
+
+  if (isAceSyncInput(syncInput)) {
+    return executeAceAction(runtime, syncInput);
+  }
+
+  if (syncInput.action === "SYNC_REDEEM_TICKET") {
+    throw new Error(
+      "SYNC_REDEEM_TICKET is disabled. Request ticket with ACE_WITHDRAW_TICKET and redeem on-chain from the employee wallet via vault.withdrawWithTicket().",
+    );
+  }
 
   const instruction = buildInstruction(syncInput);
   return submitInstruction(runtime, evmClient, instruction);
@@ -384,7 +655,7 @@ const initWorkflow = (config: Config) => {
 
   const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector);
   const httpTrigger = new cre.capabilities.HTTPCapability();
-  const onHTTPTriggerWithClient = (runtime: Runtime<Config>, payload: HTTPPayload): string =>
+  const onHTTPTriggerWithClient = (runtime: Runtime<Config>, payload: HTTPPayload): Promise<string> =>
     onHTTPTrigger(runtime, evmClient, payload);
 
   return [

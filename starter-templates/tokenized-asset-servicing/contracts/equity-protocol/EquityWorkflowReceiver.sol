@@ -16,7 +16,7 @@ import "./PrivateEmployeeEquity.sol";
 ///    3 = SYNC_FREEZE_WALLET    → Token.setAddressFrozen()
 ///    4 = SYNC_PRIVATE_DEPOSIT  → PrivateEmployeeEquity.depositToVault()
 ///    5 = SYNC_BATCH            → process multiple
-///    6 = SYNC_REDEEM_TICKET    → PrivateEmployeeEquity.redeemTicket()
+///    6 = SYNC_REDEEM_TICKET    → disabled (must redeem onchain from end-user wallet)
 ///
 /// @dev This contract must hold:
 ///   - Ownership of IdentityRegistry  (for registerIdentity / deleteIdentity / setCountry)
@@ -45,6 +45,7 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
     );
 
     error UnsupportedAction(uint8 actionType);
+    error RedeemTicketDisabled();
 
     constructor(
         address _forwarderAddress,
@@ -113,7 +114,7 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
                 _processSingleReport(batches[i]);
             }
         } else if (actionType == ActionType.SYNC_REDEEM_TICKET) {
-            _processRedeemTicketPayload(payload);
+            revert RedeemTicketDisabled();
         } else {
             revert UnsupportedAction(rawActionType);
         }
@@ -151,10 +152,5 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
     function _processPrivateDepositPayload(bytes memory payload) internal {
         uint256 amount = abi.decode(payload, (uint256));
         privateEquity.depositToVault(amount);
-    }
-
-    function _processRedeemTicketPayload(bytes memory payload) internal {
-        (uint256 amount, bytes memory ticket) = abi.decode(payload, (uint256, bytes));
-        privateEquity.redeemTicket(amount, ticket);
     }
 }
