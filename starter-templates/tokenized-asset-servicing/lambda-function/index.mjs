@@ -36,6 +36,8 @@ const COMPANY_ALLOWED_FIELDS = [
   "employed",
   "goalId",
   "goalAchieved",
+  "cliffEndTimestamp",
+  "goalRequired",
   "walletFrozen",
   "privateDepositAmount",
   "ticketRedeemAmount",
@@ -198,6 +200,23 @@ const buildSyncPayloadsFromCompanyInput = (params, employeeState) => {
       action: "SYNC_GOAL",
       goalId: employeeState.goalId,
       achieved: Boolean(employeeState.goalAchieved),
+      employeeAddress,
+    });
+  }
+
+  const shouldSyncClaimRequirements =
+    params.syncClaimRequirements === true ||
+    params.cliffEndTimestamp !== undefined ||
+    params.goalId !== undefined ||
+    params.goalRequired !== undefined;
+
+  if (shouldSyncClaimRequirements) {
+    payloads.push({
+      action: "SYNC_SET_CLAIM_REQUIREMENTS",
+      employeeAddress,
+      cliffEndTimestamp: Number(employeeState.cliffEndTimestamp ?? 0),
+      goalId: String(employeeState.goalId || "0x0000000000000000000000000000000000000000000000000000000000000000"),
+      goalRequired: Boolean(employeeState.goalRequired),
     });
   }
 

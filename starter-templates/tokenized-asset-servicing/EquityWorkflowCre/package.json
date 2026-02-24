@@ -6,7 +6,8 @@
   "scripts": {
     "postinstall": "bun x cre-setup",
     "test:sync-write": "node ./tests/run-sync-write-test.mjs",
-    "test:lambda-sync": "node ./tests/run-lambda-sync-simulation.mjs"
+    "test:lambda-sync": "node ./tests/run-lambda-sync-simulation.mjs",
+    "test:lambda-cre-ace-ticket": "node ./tests/run-lambda-cre-ace-ticket-flow.mjs"
   },
   "license": "UNLICENSED",
   "dependencies": {

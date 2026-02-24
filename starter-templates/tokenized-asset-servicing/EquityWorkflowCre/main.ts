@@ -62,8 +62,35 @@ const syncFreezeWalletSchema = z.object({
   frozen: z.boolean(),
 });
 
+const syncEmploymentStatusSchema = z.object({
+  action: z.literal("SYNC_EMPLOYMENT_STATUS"),
+  employeeAddress: addressSchema,
+  employed: z.boolean(),
+});
+
+const syncGoalSchema = z.object({
+  action: z.literal("SYNC_GOAL"),
+  goalId: bytes32Schema,
+  achieved: z.boolean(),
+  employeeAddress: addressSchema.optional(),
+});
+
+const syncSetClaimRequirementsSchema = z.object({
+  action: z.literal("SYNC_SET_CLAIM_REQUIREMENTS"),
+  employeeAddress: addressSchema,
+  cliffEndTimestamp: z.coerce.number().int().min(0).max(2 ** 32 - 1),
+  goalId: bytes32Schema.optional(),
+  goalRequired: z.boolean().optional(),
+});
+
 const syncPrivateDepositSchema = z.object({
   action: z.literal("SYNC_PRIVATE_DEPOSIT"),
+  amount: z.coerce.bigint().positive(),
+});
+
+const syncMintSchema = z.object({
+  action: z.literal("SYNC_MINT"),
+  to: addressSchema,
   amount: z.coerce.bigint().positive(),
 });
 
@@ -99,8 +126,12 @@ const aceWithdrawTicketSchema = z.object({
 
 const onchainBaseSyncInputSchema = z.discriminatedUnion("action", [
   syncKycSchema,
+  syncEmploymentStatusSchema,
+  syncGoalSchema,
   syncFreezeWalletSchema,
+  syncSetClaimRequirementsSchema,
   syncPrivateDepositSchema,
+  syncMintSchema,
   syncRedeemTicketSchema,
 ]);
 
@@ -111,8 +142,12 @@ const syncBatchSchema = z.object({
 
 const onchainSyncInputSchema = z.discriminatedUnion("action", [
   syncKycSchema,
+  syncEmploymentStatusSchema,
+  syncGoalSchema,
   syncFreezeWalletSchema,
+  syncSetClaimRequirementsSchema,
   syncPrivateDepositSchema,
+  syncMintSchema,
   syncRedeemTicketSchema,
   syncBatchSchema,
 ]);
@@ -140,12 +175,14 @@ type PostResponseWithBody = {
 
 const ACTION_TYPE = {
   SYNC_KYC: 0,
-  SYNC_EMPLOYMENT_STATUS: 1, // no-op
-  SYNC_GOAL: 2,              // no-op
+  SYNC_EMPLOYMENT_STATUS: 1,
+  SYNC_GOAL: 2,
   SYNC_FREEZE_WALLET: 3,
   SYNC_PRIVATE_DEPOSIT: 4,
   SYNC_BATCH: 5,
   SYNC_REDEEM_TICKET: 6,
+  SYNC_MINT: 7,
+  SYNC_SET_CLAIM_REQUIREMENTS: 8,
 } as const;
 
 const DEFAULT_ACE_API_URL = "https://convergence2026-token-api.cldev.cloud";
@@ -331,6 +368,40 @@ const buildInstruction = (input: OnchainSyncInput): { actionType: number; payloa
       );
       return { actionType: ACTION_TYPE.SYNC_FREEZE_WALLET, payload };
     }
+    case "SYNC_EMPLOYMENT_STATUS": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address employee, bool employed"),
+        [getAddress(input.employeeAddress), input.employed]
+      );
+      return { actionType: ACTION_TYPE.SYNC_EMPLOYMENT_STATUS, payload };
+    }
+    case "SYNC_GOAL": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("bytes32 goalId, bool achieved, address employeeHint"),
+        [
+          input.goalId as `0x${string}`,
+          input.achieved,
+          getAddress(input.employeeAddress ?? "0x0000000000000000000000000000000000000000"),
+        ],
+      );
+      return { actionType: ACTION_TYPE.SYNC_GOAL, payload };
+    }
+    case "SYNC_SET_CLAIM_REQUIREMENTS": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address employee, uint64 cliffEndTimestamp, bytes32 goalId, bool goalRequired"),
+        [
+          getAddress(input.employeeAddress),
+          BigInt(input.cliffEndTimestamp),
+          (input.goalId ?? "0x0000000000000000000000000000000000000000000000000000000000000000") as `0x${string}`,
+          input.goalRequired ?? false,
+        ],
+      );
+
+      return {
+        actionType: ACTION_TYPE.SYNC_SET_CLAIM_REQUIREMENTS,
+        payload,
+      };
+    }
     case "SYNC_PRIVATE_DEPOSIT": {
       const payload = encodeAbiParameters(
         parseAbiParameters("uint256 amount"),
@@ -339,6 +410,17 @@ const buildInstruction = (input: OnchainSyncInput): { actionType: number; payloa
 
       return {
         actionType: ACTION_TYPE.SYNC_PRIVATE_DEPOSIT,
+        payload,
+      };
+    }
+    case "SYNC_MINT": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address to, uint256 amount"),
+        [getAddress(input.to), input.amount],
+      );
+
+      return {
+        actionType: ACTION_TYPE.SYNC_MINT,
         payload,
       };
     }
