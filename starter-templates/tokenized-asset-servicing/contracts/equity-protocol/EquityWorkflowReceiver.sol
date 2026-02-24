@@ -11,12 +11,14 @@ import "./PrivateEmployeeEquity.sol";
 ///
 ///  Action Types:
 ///    0 = SYNC_KYC              → IdentityRegistry
-///    1 = SYNC_EMPLOYMENT_STATUS (no-op, handled off-chain)
-///    2 = SYNC_GOAL              (no-op, handled off-chain)
+///    1 = SYNC_EMPLOYMENT_STATUS → PrivateEmployeeEquity.updateEmploymentStatus() + freeze sync
+///    2 = SYNC_GOAL              → PrivateEmployeeEquity.setGoalAchieved() + optional freeze sync
 ///    3 = SYNC_FREEZE_WALLET    → Token.setAddressFrozen()
 ///    4 = SYNC_PRIVATE_DEPOSIT  → PrivateEmployeeEquity.depositToVault()
 ///    5 = SYNC_BATCH            → process multiple
 ///    6 = SYNC_REDEEM_TICKET    → disabled (must redeem onchain from end-user wallet)
+///    7 = SYNC_MINT             → Token.mint(to, amount)
+///    8 = SYNC_SET_CLAIM_REQUIREMENTS → PrivateEmployeeEquity.setClaimRequirements() + freeze sync
 ///
 /// @dev This contract must hold:
 ///   - Ownership of IdentityRegistry  (for registerIdentity / deleteIdentity / setCountry)
@@ -30,7 +32,9 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         SYNC_FREEZE_WALLET,     // 3
         SYNC_PRIVATE_DEPOSIT,   // 4
         SYNC_BATCH,             // 5
-        SYNC_REDEEM_TICKET      // 6
+        SYNC_REDEEM_TICKET,     // 6
+        SYNC_MINT,              // 7
+        SYNC_SET_CLAIM_REQUIREMENTS // 8
     }
 
     IIdentityRegistry public identityRegistry;
@@ -101,9 +105,9 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         if (actionType == ActionType.SYNC_KYC) {
             _processKycPayload(payload);
         } else if (actionType == ActionType.SYNC_EMPLOYMENT_STATUS) {
-            // no-op
+            _processEmploymentStatusPayload(payload);
         } else if (actionType == ActionType.SYNC_GOAL) {
-            // no-op
+            _processGoalPayload(payload);
         } else if (actionType == ActionType.SYNC_FREEZE_WALLET) {
             _processFreezeWalletPayload(payload);
         } else if (actionType == ActionType.SYNC_PRIVATE_DEPOSIT) {
@@ -115,6 +119,10 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
             }
         } else if (actionType == ActionType.SYNC_REDEEM_TICKET) {
             revert RedeemTicketDisabled();
+        } else if (actionType == ActionType.SYNC_MINT) {
+            _processMintPayload(payload);
+        } else if (actionType == ActionType.SYNC_SET_CLAIM_REQUIREMENTS) {
+            _processClaimRequirementsPayload(payload);
         } else {
             revert UnsupportedAction(rawActionType);
         }
@@ -149,8 +157,39 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         token.setAddressFrozen(wallet, frozen);
     }
 
+    function _processEmploymentStatusPayload(bytes memory payload) internal {
+        (address employee, bool employed) = abi.decode(payload, (address, bool));
+        privateEquity.updateEmploymentStatus(employee, employed);
+        _syncWalletFreezeFromEligibility(employee);
+    }
+
+    function _processGoalPayload(bytes memory payload) internal {
+        (bytes32 goalId, bool achieved, address employeeHint) = abi.decode(payload, (bytes32, bool, address));
+        privateEquity.setGoalAchieved(goalId, achieved);
+        if (employeeHint != address(0)) {
+            _syncWalletFreezeFromEligibility(employeeHint);
+        }
+    }
+
     function _processPrivateDepositPayload(bytes memory payload) internal {
         uint256 amount = abi.decode(payload, (uint256));
         privateEquity.depositToVault(amount);
+    }
+
+    function _processMintPayload(bytes memory payload) internal {
+        (address to, uint256 amount) = abi.decode(payload, (address, uint256));
+        token.mint(to, amount);
+    }
+
+    function _processClaimRequirementsPayload(bytes memory payload) internal {
+        (address employee, uint64 cliffEndTimestamp, bytes32 goalId, bool goalRequired) =
+            abi.decode(payload, (address, uint64, bytes32, bool));
+        privateEquity.setClaimRequirements(employee, cliffEndTimestamp, goalId, goalRequired);
+        _syncWalletFreezeFromEligibility(employee);
+    }
+
+    function _syncWalletFreezeFromEligibility(address employee) internal {
+        bool eligible = privateEquity.isEmployeeEligible(employee);
+        token.setAddressFrozen(employee, !eligible);
     }
 }
