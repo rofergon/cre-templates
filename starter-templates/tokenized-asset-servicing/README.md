@@ -1,4 +1,4 @@
-# Tokenized Asset Servicing (CRE + ERC-3643 + ACE)
+# Equity Tokenized Asset Servicing (CRE + ERC-3643 + ACE)
 
 End-to-end reference implementation for a tokenized equity protocol with:
 - ERC-3643 style compliance and identity controls.
