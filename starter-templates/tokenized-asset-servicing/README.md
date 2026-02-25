@@ -11,24 +11,40 @@ This repository is currently operated in local simulation mode for workflow exec
 ## Current Network and Deployment
 
 Network: Ethereum Sepolia (chainId 11155111)
-Deployment snapshot file: `contracts/deployments/equity-latest.sepolia.json`
+Deployment snapshot file: [`contracts/deployments/equity-latest.sepolia.json`](./contracts/deployments/equity-latest.sepolia.json)
 Deployed at: `2026-02-25T00:05:26.113Z`
 
 ### Core Addresses (latest snapshot)
 
 | Component | Address |
 |---|---|
-| CRE Forwarder (Sepolia) | `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5` |
-| ACE Vault (official demo) | `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13` |
-| EquityWorkflowReceiver | `0x1C312E03A316Eab45e468bf3a0F8171873cd2188` |
-| IdentityRegistry | `0x032a3Be70148aE44C362345271485C917eb73355` |
-| ComplianceV2 | `0xEEd878eeA3D23095d5c1939471b0b130f4d9c265` |
-| Token (ERC-3643 rail) | `0x1Cd2325cB59A13ED00B7e703f8f052C69943170e` |
-| PrivateEmployeeEquity | `0x853b8cd153BBB7340489F530FA9968DE7Cb2AAb2` |
-| PrivateRoundsMarket | `0x39a7b9Bcd125B1396BFfb5aF828bDe229F87C544` |
-| MockUSDC (6d) | `0x58384dFD613F0B8408b4197A031ED1E36F55868c` |
-| Treasury | `0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38` |
-| ACE Policy Engine | `0x49e337bc25b3e957bF9Ca8165666f2147b61669f` |
+| CRE Forwarder (Sepolia) | [`0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`](https://sepolia.etherscan.io/address/0x82300bd7c3958625581cc2f77bc6464dcecdf3e5) |
+| ACE Vault (official demo) | [`0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`](https://sepolia.etherscan.io/address/0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13) |
+| EquityWorkflowReceiver | [`0x1C312E03A316Eab45e468bf3a0F8171873cd2188`](https://sepolia.etherscan.io/address/0x1C312E03A316Eab45e468bf3a0F8171873cd2188) |
+| IdentityRegistry | [`0x032a3Be70148aE44C362345271485C917eb73355`](https://sepolia.etherscan.io/address/0x032a3Be70148aE44C362345271485C917eb73355) |
+| ComplianceV2 | [`0xEEd878eeA3D23095d5c1939471b0b130f4d9c265`](https://sepolia.etherscan.io/address/0xEEd878eeA3D23095d5c1939471b0b130f4d9c265) |
+| Token (ERC-3643 rail) | [`0x1Cd2325cB59A13ED00B7e703f8f052C69943170e`](https://sepolia.etherscan.io/address/0x1Cd2325cB59A13ED00B7e703f8f052C69943170e) |
+| PrivateEmployeeEquity | [`0x853b8cd153BBB7340489F530FA9968DE7Cb2AAb2`](https://sepolia.etherscan.io/address/0x853b8cd153BBB7340489F530FA9968DE7Cb2AAb2) |
+| PrivateRoundsMarket | [`0x39a7b9Bcd125B1396BFfb5aF828bDe229F87C544`](https://sepolia.etherscan.io/address/0x39a7b9Bcd125B1396BFfb5aF828bDe229F87C544) |
+| MockUSDC (6d) | [`0x58384dFD613F0B8408b4197A031ED1E36F55868c`](https://sepolia.etherscan.io/address/0x58384dFD613F0B8408b4197A031ED1E36F55868c) |
+| Treasury | [`0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38`](https://sepolia.etherscan.io/address/0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38) |
+| ACE Policy Engine | [`0x49e337bc25b3e957bF9Ca8165666f2147b61669f`](https://sepolia.etherscan.io/address/0x49e337bc25b3e957bF9Ca8165666f2147b61669f) |
+
+## GitHub Directory
+
+Main modules:
+- [`/EquityWorkflowCre`](./EquityWorkflowCre) - CRE workflow (`main.ts`), configs and E2E tests.
+- [`/contracts`](./contracts) - Hardhat project, deployment scripts and interfaces.
+- [`/contracts/equity-protocol`](./contracts/equity-protocol) - core onchain protocol contracts.
+- [`/lambda-function`](./lambda-function) - Lambda sync backend for DynamoDB and CRE orchestration.
+- [`/ace-private-transfers`](./ace-private-transfers) - ACE Foundry scripts and API scripts.
+
+Key docs and artifacts:
+- [`/README.md`](./README.md) - project overview and operations.
+- [`/protocol_coherence_report.md`](./protocol_coherence_report.md) - coherence review and findings.
+- [`/contracts/deployments/equity-latest.sepolia.json`](./contracts/deployments/equity-latest.sepolia.json) - latest deployed addresses.
+- [`/equity_cre_architecture.svg`](./equity_cre_architecture.svg) - high-level architecture diagram.
+- [`/equity_solidity_architecture.svg`](./equity_solidity_architecture.svg) - solidity architecture diagram.
 
 ## Architecture
 
