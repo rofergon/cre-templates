@@ -23,6 +23,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import {
   createPublicClient,
   createWalletClient,
@@ -173,6 +174,31 @@ const parseEnvFile = (path) => {
   return out;
 };
 
+const wait = (ms) => new Promise((resolveWait) => setTimeout(resolveWait, ms));
+
+const isTransientTxError = (text) => {
+  const normalized = String(text || "").toLowerCase();
+  return (
+    normalized.includes("replacement transaction underpriced") ||
+    normalized.includes("nonce too low") ||
+    normalized.includes("already known")
+  );
+};
+
+const extractTxHash = (text) => {
+  const matches = text.match(/0x[a-fA-F0-9]{64}/g);
+  if (!matches || matches.length === 0) {
+    throw new Error(`No tx hash found in output:\n${text}`);
+  }
+  return matches[matches.length - 1];
+};
+
+const indentText = (text, indent = "      ") =>
+  String(text || "")
+    .split(/\r?\n/)
+    .map((line) => `${indent}${line}`)
+    .join("\n");
+
 const normalizePrivateKey = (value, label) => {
   if (!value) throw new Error(`Missing ${label}`);
   const trimmed = String(value).trim();
@@ -230,6 +256,14 @@ const run = async () => {
     envFromFile.PRIVATE_ROUNDS_TREASURY_ADDRESS ||
     evmConfig.treasuryAddress ||
     admin.address;
+  const useDirectReceiverReports =
+    String(
+      process.env.USE_DIRECT_RECEIVER_REPORTS ??
+        envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
+        "true",
+    ).toLowerCase() === "true";
+  const logCreOutput =
+    String(process.env.LOG_CRE_OUTPUT ?? envFromFile.LOG_CRE_OUTPUT ?? "true").toLowerCase() === "true";
 
   if (!receiverAddress || !tokenAddress || !complianceAddress || !marketAddress || !usdcAddress) {
     throw new Error(
@@ -240,6 +274,9 @@ const run = async () => {
   const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
   const adminWalletClient = createWalletClient({ account: admin, chain: sepolia, transport: http(rpcUrl) });
   const buyerWalletClient = createWalletClient({ account: buyer, chain: sepolia, transport: http(rpcUrl) });
+  const childEnv = { ...process.env };
+  childEnv.CRE_ETH_PRIVATE_KEY = adminPk;
+  childEnv.CRE_TARGET = "local-simulation";
 
   const waitReceipt = async (hash) => {
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -358,7 +395,48 @@ const run = async () => {
     throw new Error(`Unsupported action: ${payload.action}`);
   };
 
+  const runCre = async (payload) => {
+    const payloadJson = JSON.stringify(payload, (_, value) =>
+      typeof value === "bigint" ? value.toString() : value,
+    );
+    const args = [
+      "workflow",
+      "simulate",
+      "./EquityWorkflowCre",
+      "--target",
+      "local-simulation",
+      "--non-interactive",
+      "--trigger-index",
+      "0",
+      "--http-payload",
+      payloadJson,
+      "--broadcast",
+    ];
+
+    let lastOutput = "";
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const out = spawnSync("cre", args, { cwd: projectRoot, encoding: "utf-8", env: childEnv });
+      const merged = `${out.stdout || ""}\n${out.stderr || ""}`;
+      lastOutput = merged;
+      if (logCreOutput) {
+        console.log(`   [CRE CLI attempt ${attempt}] payload: ${payload.action}`);
+        console.log(indentText(merged.trim() || "(no output)"));
+      }
+      if (out.status === 0) return extractTxHash(merged);
+      if (attempt < 4 && isTransientTxError(merged)) {
+        await wait(15000);
+        continue;
+      }
+      throw new Error(`CRE command failed:\n${merged}`);
+    }
+    throw new Error(`CRE command failed after retries:\n${lastOutput}`);
+  };
+
   const sendOnchainAction = async (payload) => {
+    if (!useDirectReceiverReports) {
+      return runCre(payload);
+    }
+
     const report = encodeInstruction(payload);
     const txHash = await adminWalletClient.writeContract({
       address: receiverAddress,
@@ -380,6 +458,7 @@ const run = async () => {
   console.log(`Market:      ${marketAddress}`);
   console.log(`USDC:        ${usdcAddress}`);
   console.log(`Treasury:    ${treasuryAddress}`);
+  console.log(`Report path: ${useDirectReceiverReports ? "direct onReport" : "CRE simulate"}`);
 
   console.log("\n1) Ensure compliance + KYC baseline...");
   await sendOnchainAction({
