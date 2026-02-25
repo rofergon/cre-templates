@@ -11,7 +11,9 @@
  *   LAMBDA_URL (or config.staging.json url)
  *
  * Optional env:
- *   USE_DIRECT_RECEIVER_REPORTS=true   (default true; recommended with receiver test mode)
+ *   USE_DIRECT_RECEIVER_REPORTS=true   (default false; bypass CRE and call receiver directly)
+ *   LOG_CRE_OUTPUT=true                (default true)
+ *   LOG_ACE_OUTPUT=true                (default true)
  *   SEPOLIA_RPC_URL
  *   CRE_EMPLOYEE_IDENTITY_ADDRESS
  *   CRE_ADMIN_IDENTITY_ADDRESS
@@ -274,6 +276,12 @@ const pretty = (value) =>
     2,
   );
 
+const indentText = (text, indent = "      ") =>
+  String(text || "")
+    .split(/\r?\n/)
+    .map((line) => `${indent}${line}`)
+    .join("\n");
+
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const isTransientTxError = (text) => {
@@ -406,8 +414,12 @@ const run = async () => {
     String(
       process.env.USE_DIRECT_RECEIVER_REPORTS ??
         envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
-        "true",
+        "false",
     ).toLowerCase() === "true";
+  const logCreOutput =
+    String(process.env.LOG_CRE_OUTPUT ?? envFromFile.LOG_CRE_OUTPUT ?? "true").toLowerCase() === "true";
+  const logAceOutput =
+    String(process.env.LOG_ACE_OUTPUT ?? envFromFile.LOG_ACE_OUTPUT ?? "true").toLowerCase() === "true";
 
   const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
   const adminWalletClient = createWalletClient({ account: admin, chain: sepolia, transport: http(rpcUrl) });
@@ -450,6 +462,10 @@ const run = async () => {
       const out = spawnSync("cre", args, { cwd: projectRoot, encoding: "utf-8", env: childEnv });
       const merged = `${out.stdout || ""}\n${out.stderr || ""}`;
       lastOutput = merged;
+      if (logCreOutput) {
+        console.log(`   [CRE CLI attempt ${attempt}] payload: ${payload.action}`);
+        console.log(indentText(merged.trim() || "(no output)"));
+      }
       if (out.status === 0) return extractTxHash(merged);
       if (attempt < 4 && isTransientTxError(merged)) {
         await wait(15000);
@@ -603,12 +619,26 @@ const run = async () => {
 
   const postAce = async (endpoint, body) => {
     const url = `${aceApiBase.replace(/\/$/, "")}${endpoint}`;
+    const safeBody = (() => {
+      const copy = { ...body };
+      if (typeof copy.auth === "string") {
+        copy.auth = `${copy.auth.slice(0, 18)}...`;
+      }
+      return copy;
+    })();
+    if (logAceOutput) {
+      console.log(`   [ACE] POST ${url}`);
+      console.log(`   [ACE] request: ${pretty(safeBody)}`);
+    }
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     const data = await asJson(resp);
+    if (logAceOutput) {
+      console.log(`   [ACE] response (${resp.status}): ${pretty(data)}`);
+    }
     if (!resp.ok) {
       throw new Error(`ACE ${endpoint} failed (${resp.status}): ${pretty(data)}`);
     }
