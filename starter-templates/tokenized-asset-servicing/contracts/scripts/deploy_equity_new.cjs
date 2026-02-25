@@ -97,6 +97,10 @@ const updateWorkflowConfigFile = (filePath, addresses) => {
     evm0.identityRegistryAddress = addresses.identityRegistryAddress;
     evm0.acePrivacyManagerAddress = addresses.privateEquityAddress;
     evm0.tokenAddress = addresses.tokenAddress;
+    evm0.complianceV2Address = addresses.complianceAddress;
+    evm0.privateRoundsMarketAddress = addresses.privateRoundsMarketAddress;
+    evm0.usdcAddress = addresses.usdcAddress;
+    evm0.treasuryAddress = addresses.treasuryAddress;
 
     writeJson(filePath, cfg);
     return true;
@@ -171,6 +175,10 @@ const deployFreshPolicyEngineProxy = async (deployerSigner, seedPolicyEngineAddr
 // Vesting pool: tokens pre-funded into PrivateEmployeeEquity so it can deposit to ACE
 // 1,000,000 tokens with 18 decimals = 1_000_000 * 10^18
 const VESTING_POOL_AMOUNT = ethers.parseEther("1000000");
+const MOCK_USDC_INITIAL_SUPPLY = BigInt(process.env.MOCK_USDC_INITIAL_SUPPLY || "1000000000000"); // 1,000,000 USDC (6d)
+const PRIVATE_ROUNDS_SETTLEMENT_TIMEOUT_SECONDS = Number(
+    process.env.PRIVATE_ROUNDS_SETTLEMENT_TIMEOUT_SECONDS || "3600",
+);
 
 // Deployer KYC identity address (placeholder — deployer is registered in registry before minting)
 // Must be non-zero for Token.mint() to pass the isVerified() check
@@ -214,14 +222,14 @@ async function main() {
     console.log("   -> IdentityRegistry:", identityRegistryAddress);
 
     // ───────────────────────────────────────────
-    // 2. Deploy Compliance
+    // 2. Deploy ComplianceV2
     // ───────────────────────────────────────────
-    console.log("\n2. Deploying Compliance...");
-    const Compliance = await ethers.getContractFactory("Compliance");
-    const compliance = await Compliance.deploy();
+    console.log("\n2. Deploying ComplianceV2...");
+    const ComplianceV2 = await ethers.getContractFactory("ComplianceV2");
+    const compliance = await ComplianceV2.deploy(identityRegistryAddress);
     await compliance.waitForDeployment();
     const complianceAddress = await compliance.getAddress();
-    console.log("   -> Compliance:", complianceAddress);
+    console.log("   -> ComplianceV2:", complianceAddress);
 
     // ───────────────────────────────────────────
     // 3. Deploy Token (ERC-3643)
@@ -244,37 +252,90 @@ async function main() {
     console.log("   -> PrivateEmployeeEquity:", privateEquityAddress);
 
     // ───────────────────────────────────────────
-    // 5. Deploy EquityWorkflowReceiver
+    // 5. Deploy MockUSDC + PrivateRoundsMarket
     // ───────────────────────────────────────────
-    console.log("\n5. Deploying EquityWorkflowReceiver...");
+    console.log("\n5. Deploying MockUSDC...");
+    const MockUSDC = await ethers.getContractFactory("MockUSDC");
+    const usdc = await MockUSDC.deploy();
+    await usdc.waitForDeployment();
+    const usdcAddress = await usdc.getAddress();
+    console.log("   -> MockUSDC:", usdcAddress);
+
+    const treasuryAddress = process.env.PRIVATE_ROUNDS_TREASURY_ADDRESS
+        ? ethers.getAddress(process.env.PRIVATE_ROUNDS_TREASURY_ADDRESS)
+        : deployer.address;
+
+    console.log("\n6. Deploying PrivateRoundsMarket...");
+    const PrivateRoundsMarket = await ethers.getContractFactory("PrivateRoundsMarket");
+    const privateRoundsMarket = await PrivateRoundsMarket.deploy(
+        usdcAddress,
+        complianceAddress,
+        identityRegistryAddress,
+        treasuryAddress,
+        PRIVATE_ROUNDS_SETTLEMENT_TIMEOUT_SECONDS,
+    );
+    await privateRoundsMarket.waitForDeployment();
+    const privateRoundsMarketAddress = await privateRoundsMarket.getAddress();
+    console.log("   -> PrivateRoundsMarket:", privateRoundsMarketAddress);
+
+    console.log(`   [6.1] Minting ${MOCK_USDC_INITIAL_SUPPLY.toString()} mUSDC to deployer...`);
+    try {
+        const tx = await usdc.mint(deployer.address, MOCK_USDC_INITIAL_SUPPLY);
+        await tx.wait();
+        console.log("         OK");
+    } catch (e) { console.error("         FAILED:", e.message); }
+
+    // ───────────────────────────────────────────
+    // 7. Deploy EquityWorkflowReceiver
+    // ───────────────────────────────────────────
+    console.log("\n7. Deploying EquityWorkflowReceiver...");
     const EquityWorkflowReceiver = await ethers.getContractFactory("EquityWorkflowReceiver");
     const equityWorkflowReceiver = await EquityWorkflowReceiver.deploy(
         CHAINLINK_FORWARDER_ADDRESS,
         identityRegistryAddress,
         privateEquityAddress,
-        tokenAddress
+        tokenAddress,
+        complianceAddress,
+        privateRoundsMarketAddress
     );
     await equityWorkflowReceiver.waitForDeployment();
     const equityWorkflowReceiverAddress = await equityWorkflowReceiver.getAddress();
     console.log("   -> EquityWorkflowReceiver:", equityWorkflowReceiverAddress);
 
     // ───────────────────────────────────────────
-    // 6. Bind Token to Compliance
+    // 8. Bind Token to Compliance + baseline trusted counterparties
     // ───────────────────────────────────────────
-    console.log("\n6. Configuring permissions...");
+    console.log("\n8. Configuring permissions...");
 
-    console.log("   [6.1] Binding Token to Compliance...");
+    console.log("   [8.1] Binding Token to ComplianceV2...");
     try {
         const tx = await compliance.bindToken(tokenAddress);
         await tx.wait();
         console.log("         OK");
     } catch (e) { console.error("         FAILED:", e.message); }
 
+    console.log("   [8.2] Setting trusted counterparties for operational rail...");
+    try {
+        const tx = await compliance.setTrustedCounterpartyBatch(
+            [privateEquityAddress, equityWorkflowReceiverAddress, privateRoundsMarketAddress],
+            true,
+        );
+        await tx.wait();
+        console.log("         OK");
+    } catch (e) { console.error("         FAILED:", e.message); }
+
+    console.log("   [8.3] Authorizing ACE vault address in ComplianceV2...");
+    try {
+        const tx = await compliance.setInvestorAuthorization(ACE_VAULT_ADDRESS, true);
+        await tx.wait();
+        console.log("         OK");
+    } catch (e) { console.error("         FAILED:", e.message); }
+
     // ───────────────────────────────────────────
-    // 7. Register deployer in IdentityRegistry
+    // 9. Register deployer in IdentityRegistry
     //    (Required so Token.mint() passes isVerified check)
     // ───────────────────────────────────────────
-    console.log("   [7.1] Registering deployer in IdentityRegistry...");
+    console.log("   [9.1] Registering deployer in IdentityRegistry...");
     try {
         const tx = await identityRegistry.registerIdentity(
             deployer.address,
@@ -286,10 +347,10 @@ async function main() {
     } catch (e) { console.error("         FAILED:", e.message); }
 
     // ───────────────────────────────────────────
-    // 8. Register PrivateEmployeeEquity and mint tokens
+    // 10. Register PrivateEmployeeEquity and mint tokens
     //    (ERC-3643 Token requires all transfer recipients to be isVerified)
     // ───────────────────────────────────────────
-    console.log("   [8.1] Registering PrivateEmployeeEquity contract in IdentityRegistry...");
+    console.log("   [10.1] Registering PrivateEmployeeEquity contract in IdentityRegistry...");
     try {
         const tx = await identityRegistry.registerIdentity(
             privateEquityAddress,
@@ -300,7 +361,7 @@ async function main() {
         console.log("         OK");
     } catch (e) { console.error("         FAILED:", e.message); }
 
-    console.log(`   [8.2] Minting ${ethers.formatEther(VESTING_POOL_AMOUNT)} EQT to PrivateEmployeeEquity pool...`);
+    console.log(`   [10.2] Minting ${ethers.formatEther(VESTING_POOL_AMOUNT)} EQT to PrivateEmployeeEquity pool...`);
     try {
         const tx = await token.mint(privateEquityAddress, VESTING_POOL_AMOUNT);
         await tx.wait();
@@ -391,16 +452,16 @@ async function main() {
     }
 
     // ───────────────────────────────────────────
-    // 9. Transfer ownership to Receiver
+    // 11. Transfer ownership to Receiver
     // ───────────────────────────────────────────
-    console.log("   [9.1] Transferring IdentityRegistry ownership to Receiver...");
+    console.log("   [11.1] Transferring IdentityRegistry ownership to Receiver...");
     try {
         const tx = await identityRegistry.transferOwnership(equityWorkflowReceiverAddress);
         await tx.wait();
         console.log("         OK");
     } catch (e) { console.error("         FAILED:", e.message); }
 
-    console.log("   [9.2] Transferring Token ownership to Receiver...");
+    console.log("   [11.2] Transferring Token ownership to Receiver...");
     try {
         const tx = await token.transferOwnership(equityWorkflowReceiverAddress);
         await tx.wait();
@@ -408,11 +469,25 @@ async function main() {
     } catch (e) { console.error("         FAILED:", e.message); }
 
     // ───────────────────────────────────────────
-    // 10. Set Receiver as oracle in PrivateEmployeeEquity
+    // 12. Grant receiver execution rights in protocol modules
     // ───────────────────────────────────────────
-    console.log("   [10.1] Setting Receiver as oracle in PrivateEmployeeEquity...");
+    console.log("   [12.1] Setting Receiver as oracle in PrivateEmployeeEquity...");
     try {
         const tx = await privateEquity.setOracleStatus(equityWorkflowReceiverAddress, true);
+        await tx.wait();
+        console.log("          OK");
+    } catch (e) { console.error("          FAILED:", e.message); }
+
+    console.log("   [12.2] Setting Receiver as agent in ComplianceV2...");
+    try {
+        const tx = await compliance.setAgent(equityWorkflowReceiverAddress, true);
+        await tx.wait();
+        console.log("          OK");
+    } catch (e) { console.error("          FAILED:", e.message); }
+
+    console.log("   [12.3] Setting Receiver as oracle in PrivateRoundsMarket...");
+    try {
+        const tx = await privateRoundsMarket.setOracleStatus(equityWorkflowReceiverAddress, true);
         await tx.wait();
         console.log("          OK");
     } catch (e) { console.error("          FAILED:", e.message); }
@@ -421,7 +496,7 @@ async function main() {
     // Summary
     // ───────────────────────────────────────────
     if (enableTestMode) {
-        console.log("   [12.1] Enabling test mode (setForwarderAddress(0))...");
+        console.log("   [13.1] Enabling test mode (setForwarderAddress(0))...");
         try {
             const tx = await equityWorkflowReceiver.setForwarderAddress(ZERO_ADDRESS);
             await tx.wait();
@@ -445,6 +520,9 @@ async function main() {
             complianceAddress: complianceAddress,
             tokenAddress: tokenAddress,
             privateEquityAddress: privateEquityAddress,
+            privateRoundsMarketAddress: privateRoundsMarketAddress,
+            usdcAddress: usdcAddress,
+            treasuryAddress: treasuryAddress,
             acePolicyEngineAddress: effectiveAcePolicyEngineAddress || null,
         },
     };
@@ -452,18 +530,18 @@ async function main() {
     try {
         fs.mkdirSync(DEPLOYMENTS_DIR, { recursive: true });
         writeJson(DEPLOYMENTS_LATEST_PATH, deploymentSummary);
-        console.log(`   [12.2] Deployment summary written: ${DEPLOYMENTS_LATEST_PATH}`);
+        console.log(`   [13.2] Deployment summary written: ${DEPLOYMENTS_LATEST_PATH}`);
     } catch (e) {
-        console.error("   [12.2] FAILED writing deployment summary:", e.message);
+        console.error("   [13.2] FAILED writing deployment summary:", e.message);
     }
 
     if (autoUpdateCreConfigs) {
         const updatedStaging = updateWorkflowConfigFile(STAGING_CONFIG_PATH, deploymentSummary.contracts);
         const updatedProduction = updateWorkflowConfigFile(PRODUCTION_CONFIG_PATH, deploymentSummary.contracts);
-        console.log(`   [12.3] config.staging.json update:    ${updatedStaging ? "OK" : "SKIPPED"}`);
-        console.log(`   [12.4] config.production.json update: ${updatedProduction ? "OK" : "SKIPPED"}`);
+        console.log(`   [13.3] config.staging.json update:    ${updatedStaging ? "OK" : "SKIPPED"}`);
+        console.log(`   [13.4] config.production.json update: ${updatedProduction ? "OK" : "SKIPPED"}`);
     } else {
-        console.log("   [12.3] CRE config auto-update skipped (AUTO_UPDATE_CRE_CONFIGS=false)");
+        console.log("   [13.3] CRE config auto-update skipped (AUTO_UPDATE_CRE_CONFIGS=false)");
     }
 
     if (autoUpdateDotEnv) {
@@ -471,16 +549,20 @@ async function main() {
             RECEIVER_ADDRESS: equityWorkflowReceiverAddress,
             IDENTITY_REGISTRY_ADDRESS: identityRegistryAddress,
             COMPLIANCE_ADDRESS: complianceAddress,
+            COMPLIANCE_V2_ADDRESS: complianceAddress,
             TOKEN_ADDRESS: tokenAddress,
             PRIVATE_EQUITY_ADDRESS: privateEquityAddress,
+            PRIVATE_ROUNDS_MARKET_ADDRESS: privateRoundsMarketAddress,
+            USDC_ADDRESS: usdcAddress,
+            PRIVATE_ROUNDS_TREASURY_ADDRESS: treasuryAddress,
             ACE_VAULT_ADDRESS: ACE_VAULT_ADDRESS,
             ...(effectiveAcePolicyEngineAddress
                 ? { ACE_POLICY_ENGINE_ADDRESS: effectiveAcePolicyEngineAddress }
                 : {}),
         });
-        console.log(`   [12.5] .env update: ${updatedEnv ? "OK" : "SKIPPED"}`);
+        console.log(`   [13.5] .env update: ${updatedEnv ? "OK" : "SKIPPED"}`);
     } else {
-        console.log("   [12.5] .env auto-update skipped (AUTO_UPDATE_DOTENV=false)");
+        console.log("   [13.5] .env auto-update skipped (AUTO_UPDATE_DOTENV=false)");
     }
 
     console.log("\n╔══════════════════════════════════════════════════════════════╗");
@@ -490,9 +572,12 @@ async function main() {
     console.log("CRE Forwarder:            ", CHAINLINK_FORWARDER_ADDRESS);
     console.log("ACE Vault:                ", ACE_VAULT_ADDRESS);
     console.log("IdentityRegistry:         ", identityRegistryAddress);
-    console.log("Compliance:               ", complianceAddress);
+    console.log("ComplianceV2:             ", complianceAddress);
     console.log("Token (ERC-3643, EQT):    ", tokenAddress);
     console.log("PrivateEmployeeEquity:    ", privateEquityAddress);
+    console.log("PrivateRoundsMarket:      ", privateRoundsMarketAddress);
+    console.log("MockUSDC:                 ", usdcAddress);
+    console.log("Rounds Treasury:          ", treasuryAddress);
     console.log("EquityWorkflowReceiver:   ", equityWorkflowReceiverAddress);
     if (effectiveAcePolicyEngineAddress) {
         console.log("ACE PolicyEngine:         ", effectiveAcePolicyEngineAddress);
@@ -505,6 +590,10 @@ async function main() {
     console.log("   identityRegistryAddress:  " + identityRegistryAddress);
     console.log("   acePrivacyManagerAddress: " + privateEquityAddress);
     console.log("   tokenAddress:             " + tokenAddress);
+    console.log("   complianceV2Address:      " + complianceAddress);
+    console.log("   privateRoundsMarketAddress:" + privateRoundsMarketAddress);
+    console.log("   usdcAddress:              " + usdcAddress);
+    console.log("   treasuryAddress:          " + treasuryAddress);
     console.log("");
     console.log("Deployment summary file:");
     console.log("   " + DEPLOYMENTS_LATEST_PATH);
