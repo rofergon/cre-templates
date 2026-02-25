@@ -4,60 +4,88 @@ pragma solidity ^0.8.20;
 import "../interfaces/ReceiverTemplate.sol";
 import "../interfaces/IIdentityRegistry.sol";
 import "../interfaces/IERC3643.sol";
+import "../interfaces/IComplianceV2.sol";
+import "../interfaces/IPrivateRoundsMarket.sol";
 import "./PrivateEmployeeEquity.sol";
 
 /// @title EquityWorkflowReceiver
 /// @notice Receives CRE workflow reports and dispatches them to the Equity Protocol.
 ///
-///  Action Types:
-///    0 = SYNC_KYC              → IdentityRegistry
-///    1 = SYNC_EMPLOYMENT_STATUS → PrivateEmployeeEquity.updateEmploymentStatus() + freeze sync
-///    2 = SYNC_GOAL              → PrivateEmployeeEquity.setGoalAchieved() + optional freeze sync
-///    3 = SYNC_FREEZE_WALLET    → Token.setAddressFrozen()
-///    4 = SYNC_PRIVATE_DEPOSIT  → PrivateEmployeeEquity.depositToVault()
-///    5 = SYNC_BATCH            → process multiple
-///    6 = SYNC_REDEEM_TICKET    → disabled (must redeem onchain from end-user wallet)
-///    7 = SYNC_MINT             → Token.mint(to, amount)
-///    8 = SYNC_SET_CLAIM_REQUIREMENTS → PrivateEmployeeEquity.setClaimRequirements() + freeze sync
+///  Action Types (0-17):
+///    0  = SYNC_KYC
+///    1  = SYNC_EMPLOYMENT_STATUS
+///    2  = SYNC_GOAL
+///    3  = SYNC_FREEZE_WALLET
+///    4  = SYNC_PRIVATE_DEPOSIT
+///    5  = SYNC_BATCH
+///    6  = SYNC_REDEEM_TICKET (disabled)
+///    7  = SYNC_MINT
+///    8  = SYNC_SET_CLAIM_REQUIREMENTS
+///    9  = SYNC_SET_INVESTOR_AUTH
+///    10 = SYNC_SET_INVESTOR_LOCKUP
+///    11 = SYNC_CREATE_ROUND
+///    12 = SYNC_SET_ROUND_ALLOWLIST
+///    13 = SYNC_OPEN_ROUND
+///    14 = SYNC_CLOSE_ROUND
+///    15 = SYNC_MARK_PURCHASE_SETTLED
+///    16 = SYNC_REFUND_PURCHASE
+///    17 = SYNC_SET_TOKEN_COMPLIANCE
 ///
 /// @dev This contract must hold:
 ///   - Ownership of IdentityRegistry  (for registerIdentity / deleteIdentity / setCountry)
-///   - Ownership of Token             (for setAddressFrozen)
+///   - Ownership of Token             (for setAddressFrozen / mint / setCompliance)
 ///   - Oracle rights on PrivateEmployeeEquity (for private ACE transfers)
 contract EquityWorkflowReceiver is ReceiverTemplate {
     enum ActionType {
         SYNC_KYC,               // 0
         SYNC_EMPLOYMENT_STATUS, // 1
         SYNC_GOAL,              // 2
-        SYNC_FREEZE_WALLET,     // 3
-        SYNC_PRIVATE_DEPOSIT,   // 4
-        SYNC_BATCH,             // 5
-        SYNC_REDEEM_TICKET,     // 6
-        SYNC_MINT,              // 7
-        SYNC_SET_CLAIM_REQUIREMENTS // 8
+        SYNC_FREEZE_WALLET,      // 3
+        SYNC_PRIVATE_DEPOSIT,    // 4
+        SYNC_BATCH,              // 5
+        SYNC_REDEEM_TICKET,      // 6
+        SYNC_MINT,               // 7
+        SYNC_SET_CLAIM_REQUIREMENTS, // 8
+        SYNC_SET_INVESTOR_AUTH,  // 9
+        SYNC_SET_INVESTOR_LOCKUP,// 10
+        SYNC_CREATE_ROUND,       // 11
+        SYNC_SET_ROUND_ALLOWLIST,// 12
+        SYNC_OPEN_ROUND,         // 13
+        SYNC_CLOSE_ROUND,        // 14
+        SYNC_MARK_PURCHASE_SETTLED, // 15
+        SYNC_REFUND_PURCHASE,    // 16
+        SYNC_SET_TOKEN_COMPLIANCE // 17
     }
 
     IIdentityRegistry public identityRegistry;
     PrivateEmployeeEquity public privateEquity;
-    IERC3643          public token;
+    IERC3643 public token;
+    IComplianceV2 public complianceV2;
+    IPrivateRoundsMarket public privateRoundsMarket;
 
     event SyncActionExecuted(ActionType indexed actionType, bytes payload);
     event TargetsUpdated(
         address indexed identityRegistry,
         address indexed privateEquity,
-        address indexed token
+        address indexed token,
+        address complianceV2,
+        address privateRoundsMarket
     );
 
     error UnsupportedAction(uint8 actionType);
     error RedeemTicketDisabled();
+    error ComplianceTargetNotSet();
+    error MarketTargetNotSet();
 
     constructor(
         address _forwarderAddress,
         address _identityRegistry,
         address _privateEquity,
-        address _token
+        address _token,
+        address _complianceV2,
+        address _privateRoundsMarket
     ) ReceiverTemplate(_forwarderAddress) {
-        _setTargets(_identityRegistry, _privateEquity, _token);
+        _setTargets(_identityRegistry, _privateEquity, _token, _complianceV2, _privateRoundsMarket);
     }
 
     // ──────────────────────────────────────────────────────
@@ -67,15 +95,19 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
     function setTargets(
         address _identityRegistry,
         address _privateEquity,
-        address _token
+        address _token,
+        address _complianceV2,
+        address _privateRoundsMarket
     ) external onlyOwner {
-        _setTargets(_identityRegistry, _privateEquity, _token);
+        _setTargets(_identityRegistry, _privateEquity, _token, _complianceV2, _privateRoundsMarket);
     }
 
     function _setTargets(
         address _identityRegistry,
         address _privateEquity,
-        address _token
+        address _token,
+        address _complianceV2,
+        address _privateRoundsMarket
     ) internal {
         if (
             _identityRegistry == address(0) ||
@@ -84,10 +116,12 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
         ) revert ZeroAddress();
 
         identityRegistry = IIdentityRegistry(_identityRegistry);
-        privateEquity    = PrivateEmployeeEquity(_privateEquity);
-        token            = IERC3643(_token);
+        privateEquity = PrivateEmployeeEquity(_privateEquity);
+        token = IERC3643(_token);
+        complianceV2 = IComplianceV2(_complianceV2);
+        privateRoundsMarket = IPrivateRoundsMarket(_privateRoundsMarket);
 
-        emit TargetsUpdated(_identityRegistry, _privateEquity, _token);
+        emit TargetsUpdated(_identityRegistry, _privateEquity, _token, _complianceV2, _privateRoundsMarket);
     }
 
     // ──────────────────────────────────────────────────────
@@ -123,6 +157,24 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
             _processMintPayload(payload);
         } else if (actionType == ActionType.SYNC_SET_CLAIM_REQUIREMENTS) {
             _processClaimRequirementsPayload(payload);
+        } else if (actionType == ActionType.SYNC_SET_INVESTOR_AUTH) {
+            _processSetInvestorAuthPayload(payload);
+        } else if (actionType == ActionType.SYNC_SET_INVESTOR_LOCKUP) {
+            _processSetInvestorLockupPayload(payload);
+        } else if (actionType == ActionType.SYNC_CREATE_ROUND) {
+            _processCreateRoundPayload(payload);
+        } else if (actionType == ActionType.SYNC_SET_ROUND_ALLOWLIST) {
+            _processSetRoundAllowlistPayload(payload);
+        } else if (actionType == ActionType.SYNC_OPEN_ROUND) {
+            _processOpenRoundPayload(payload);
+        } else if (actionType == ActionType.SYNC_CLOSE_ROUND) {
+            _processCloseRoundPayload(payload);
+        } else if (actionType == ActionType.SYNC_MARK_PURCHASE_SETTLED) {
+            _processMarkPurchaseSettledPayload(payload);
+        } else if (actionType == ActionType.SYNC_REFUND_PURCHASE) {
+            _processRefundPurchasePayload(payload);
+        } else if (actionType == ActionType.SYNC_SET_TOKEN_COMPLIANCE) {
+            _processSetTokenCompliancePayload(payload);
         } else {
             revert UnsupportedAction(rawActionType);
         }
@@ -191,5 +243,62 @@ contract EquityWorkflowReceiver is ReceiverTemplate {
     function _syncWalletFreezeFromEligibility(address employee) internal {
         bool eligible = privateEquity.isEmployeeEligible(employee);
         token.setAddressFrozen(employee, !eligible);
+    }
+
+    function _processSetInvestorAuthPayload(bytes memory payload) internal {
+        (address investor, bool authorized) = abi.decode(payload, (address, bool));
+        _complianceTarget().setInvestorAuthorization(investor, authorized);
+    }
+
+    function _processSetInvestorLockupPayload(bytes memory payload) internal {
+        (address investor, uint64 lockupUntil) = abi.decode(payload, (address, uint64));
+        _complianceTarget().setInvestorLockup(investor, lockupUntil);
+    }
+
+    function _processCreateRoundPayload(bytes memory payload) internal {
+        (uint256 roundId, uint64 startTime, uint64 endTime, uint256 tokenPriceUsdc6, uint256 maxUsdc) =
+            abi.decode(payload, (uint256, uint64, uint64, uint256, uint256));
+        _marketTarget().createRound(roundId, startTime, endTime, tokenPriceUsdc6, maxUsdc);
+    }
+
+    function _processSetRoundAllowlistPayload(bytes memory payload) internal {
+        (uint256 roundId, address investor, uint256 capUsdc) = abi.decode(payload, (uint256, address, uint256));
+        _marketTarget().setRoundAllowlist(roundId, investor, capUsdc);
+    }
+
+    function _processOpenRoundPayload(bytes memory payload) internal {
+        uint256 roundId = abi.decode(payload, (uint256));
+        _marketTarget().openRound(roundId);
+    }
+
+    function _processCloseRoundPayload(bytes memory payload) internal {
+        uint256 roundId = abi.decode(payload, (uint256));
+        _marketTarget().closeRound(roundId);
+    }
+
+    function _processMarkPurchaseSettledPayload(bytes memory payload) internal {
+        (uint256 purchaseId, bytes32 aceTransferRef) = abi.decode(payload, (uint256, bytes32));
+        _marketTarget().markPurchaseSettled(purchaseId, aceTransferRef);
+    }
+
+    function _processRefundPurchasePayload(bytes memory payload) internal {
+        (uint256 purchaseId, bytes32 reason) = abi.decode(payload, (uint256, bytes32));
+        _marketTarget().refundPurchaseByOracle(purchaseId, reason);
+    }
+
+    function _processSetTokenCompliancePayload(bytes memory payload) internal {
+        address complianceAddress = abi.decode(payload, (address));
+        token.setCompliance(complianceAddress);
+        complianceV2 = IComplianceV2(complianceAddress);
+    }
+
+    function _complianceTarget() internal view returns (IComplianceV2) {
+        if (address(complianceV2) == address(0)) revert ComplianceTargetNotSet();
+        return complianceV2;
+    }
+
+    function _marketTarget() internal view returns (IPrivateRoundsMarket) {
+        if (address(privateRoundsMarket) == address(0)) revert MarketTargetNotSet();
+        return privateRoundsMarket;
     }
 }
