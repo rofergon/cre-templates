@@ -1,76 +1,140 @@
-# Equity Solidity Protocol (Tokenized Asset Servicing)
+# Equity Protocol Contracts (ERC-3643 + ACE + Private Rounds)
 
-This directory contains the smart contracts (written in Solidity) that make up the protocol for managing equity and tokenized assets, integrating compliance rules, identity management, and employee vesting schedules.
+This directory contains the current onchain protocol used by the repository.
 
-Furthermore, the protocol is designed to receive verified off-chain information through Chainlink CRE (Compute Runtime Environment) oracles and workflows.
+Network focus: Ethereum Sepolia (`11155111`)
+Deployment snapshot source: `../deployments/equity-latest.sepolia.json`
 
-## Contract Architecture
-
-Below is the architecture and flow diagram of the protocol's contracts:
-
-![Solidity Architecture](../../equity_solidity_architecture.svg)
-
-## Deployed Contracts (Ethereum Sepolia Testnet)
+## Current Deployed Addresses (latest snapshot)
 
 | Contract | Address |
 |---|---|
-| `EquityWorkflowReceiver` | `0x83905819019A6DeeDFF834f08DeC8238e54EBf6e` |
-| `IdentityRegistry` | `0x31D26dE5f5a255D0748035D90Ec739840df55280` |
-| `EmployeeVesting` | `0x78a40e81b6C7770B686D6D0812431422B2CC6dbb` |
-| `Token` (ERC-3643 `EQT`) | `0x2a177f9498edAB038eBA5f094526f76118E2416F` |
+| `EquityWorkflowReceiver` | `0x1C312E03A316Eab45e468bf3a0F8171873cd2188` |
+| `IdentityRegistry` | `0x032a3Be70148aE44C362345271485C917eb73355` |
+| `ComplianceV2` | `0xEEd878eeA3D23095d5c1939471b0b130f4d9c265` |
+| `Token` (ERC-3643 rail) | `0x1Cd2325cB59A13ED00B7e703f8f052C69943170e` |
+| `PrivateEmployeeEquity` | `0x853b8cd153BBB7340489F530FA9968DE7Cb2AAb2` |
+| `PrivateRoundsMarket` | `0x39a7b9Bcd125B1396BFfb5aF828bDe229F87C544` |
+| `MockUSDC` | `0x58384dFD613F0B8408b4197A031ED1E36F55868c` |
+| Treasury | `0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38` |
 
-> **Ownership model**: Ownership of `IdentityRegistry` and `Token` has been transferred to `EquityWorkflowReceiver`. `EquityWorkflowReceiver` is also registered as an oracle in `EmployeeVesting`. This means all state changes flow exclusively through CRE-verified reports.
+Related external addresses:
+- CRE forwarder (Sepolia): `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`
+- ACE vault (official demo): `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
 
-> **Chainlink Forwarder (Ethereum Sepolia)**: `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`
+## Contract Set
 
-## Main Components
+### Active contracts
 
-### 1. ERC-3643 Token (`Token.sol` & `IERC3643.sol`)
-The core of the tokenized asset. It implements the ERC-3643 standard (with backward compatibility to ERC-20 interfaces), designed or adapted to handle financial assets and security tokens. This contract ensures close interaction with the identity registry system and compliance rules before allowing transfers.
+- `IdentityRegistry.sol`
+  - KYC identity + country state.
+- `Token.sol`
+  - ERC-3643-like token with compliance hook, wallet freeze, mint/burn, forced transfer.
+- `ComplianceV2.sol`
+  - Global transfer controls:
+    - verified sender/receiver,
+    - authorized investor checks,
+    - lockup enforcement,
+    - trusted counterparties,
+    - mint receiver must be verified and authorized/trusted.
+- `PrivateEmployeeEquity.sol`
+  - Employment/goal/cliff eligibility and ACE vault deposit rail.
+- `PrivateRoundsMarket.sol`
+  - Issuer-custodied rounds with USDC escrow and purchase states (`PENDING`, `SETTLED`, `REFUNDED`).
+- `MockUSDC.sol`
+  - 6-decimals mock stablecoin for test flows.
+- `EquityWorkflowReceiver.sol`
+  - CRE report entrypoint and dispatcher (actionType 0..17).
 
-Key operations routed through CRE:
-- `setAddressFrozen(address, bool)` — called by `SYNC_FREEZE_WALLET`
+### Legacy contracts kept in repo
 
-### 2. Identity Management (`IdentityRegistry.sol` & `IIdentityRegistry.sol`)
-Manages the credentials and KYC/AML verification status of the different addresses (wallets) in the ecosystem. A user can only receive or operate with tokens if they maintain a valid status within this registry.
+- `Compliance.sol`
+- `EmployeeVesting.sol`
 
-Key operations routed through CRE:
-- `registerIdentity(address, address, uint16)` — called by `SYNC_KYC` when `verified=true` and identity not yet registered
-- `deleteIdentity(address)` — called by `SYNC_KYC` when `verified=false`
-- `setCountry(address, uint16)` — called by `SYNC_KYC` when identity already registered and country changes
+They are not the primary path in the current deployed flow.
 
-### 3. Compliance Rules (`Compliance.sol` & `ICompliance.sol`)
-Acts as a plug-and-play module that validates whether a transfer complies with regulations (e.g., holding limits, transfer blocks between certain countries, or frozen wallet controls). The Token contract is bound to `Compliance` via `bindToken()` during deployment.
+## Receiver Action Map (0..17)
 
-### 4. Employee Vesting (`EmployeeVesting.sol`)
-A specialized contract for the creation and administration of contractual plans (*grants*) for employees. It includes:
-- **Cliff periods** and linear *Vesting* duration.
-- **Revocable Grants**: allowing compensation schemes to be frozen if the employment relationship is terminated.
-- **Performance Goals**: vesting can depend on meeting business metrics that are validated through oracles.
+`EquityWorkflowReceiver` processes:
 
-Key operations routed through CRE:
-- `updateEmploymentStatus(address, bool)` — called by `SYNC_EMPLOYMENT_STATUS`
-- `setGoalAchieved(bytes32, bool)` — called by `SYNC_GOAL`
+- `0` `SYNC_KYC`
+- `1` `SYNC_EMPLOYMENT_STATUS`
+- `2` `SYNC_GOAL`
+- `3` `SYNC_FREEZE_WALLET`
+- `4` `SYNC_PRIVATE_DEPOSIT`
+- `5` `SYNC_BATCH`
+- `6` `SYNC_REDEEM_TICKET` (disabled)
+- `7` `SYNC_MINT`
+- `8` `SYNC_SET_CLAIM_REQUIREMENTS`
+- `9` `SYNC_SET_INVESTOR_AUTH`
+- `10` `SYNC_SET_INVESTOR_LOCKUP`
+- `11` `SYNC_CREATE_ROUND`
+- `12` `SYNC_SET_ROUND_ALLOWLIST`
+- `13` `SYNC_OPEN_ROUND`
+- `14` `SYNC_CLOSE_ROUND`
+- `15` `SYNC_MARK_PURCHASE_SETTLED`
+- `16` `SYNC_REFUND_PURCHASE`
+- `17` `SYNC_SET_TOKEN_COMPLIANCE`
 
-### 5. Smart Chain Workflow (`EquityWorkflowReceiver.sol`)
-The bridge contract that receives reports calculated by Chainlink CRE. It translates payloads created off-chain into on-chain state updates by processing multiple types of actions, such as:
-- `SYNC_KYC` (0): Synchronizes user verification information with the `IdentityRegistry`.
-- `SYNC_EMPLOYMENT_STATUS` (1): Modifies an employee's employment status in `EmployeeVesting`.
-- `SYNC_GOAL` (2): Reports the fulfillment (or non-fulfillment) of performance goals by connecting to `EmployeeVesting`.
-- `SYNC_FREEZE_WALLET` (3): Allows entire accounts to be frozen in case of emergencies, updating the policies in `Token`.
-- `SYNC_CREATE_GRANT` (4): Creates on-chain vesting grants via `EmployeeVesting`.
-- `SYNC_BATCH` (5): Accepts a `bytes[]` array of nested action payloads and processes them recursively in a single transaction. This enables bulk processing of multiple employees/actions, reducing gas overhead by ~95%.
+## Permission and Role Model
 
-## Chainlink CRE Integration
+After `deploy_equity_new.cjs`:
 
-`EquityWorkflowReceiver.sol` inherits from a receiver oracle template (`ReceiverTemplate.sol`), ensuring that real-world events are securely cross-communicated cryptographically to the settlement layer on the blockchain, bridging the gap between human capital / business metrics (Web2) and Web3 infrastructure.
+- `IdentityRegistry` ownership -> `EquityWorkflowReceiver`
+- `Token` ownership -> `EquityWorkflowReceiver`
+- `PrivateEmployeeEquity` oracle -> `EquityWorkflowReceiver`
+- `ComplianceV2` agent -> `EquityWorkflowReceiver`
+- `PrivateRoundsMarket` oracle -> `EquityWorkflowReceiver`
 
-### CRE Log Trigger Mapping (main.ts)
+Additional bootstrap setup in deploy script:
+- `ComplianceV2.bindToken(token)`
+- trusted counterparties include `PrivateEmployeeEquity`, `EquityWorkflowReceiver`, `PrivateRoundsMarket`
+- ACE vault address gets investor authorization baseline
+- deployer + private-equity addresses are registered in `IdentityRegistry` for bootstrap mint/deposit compatibility
 
-| Trigger Index | Contract | Events Forwarded to Lambda |
-|---|---|---|
-| 0 | HTTP (send to blockchain) | — |
-| 1 | `IdentityRegistry` | `IdentityRegistered`, `IdentityRemoved`, `CountryUpdated` |
-| 2 | `EmployeeVesting` | `GrantCreated`, `TokensClaimed`, `EmploymentStatusUpdated`, `GoalUpdated`, `GrantRevoked` |
+## Build and Deploy Commands
 
-> **Note:** `Token` (`AddressFrozen`) events are **not** watched by any log trigger in the current `main.ts`. The `SYNC_FREEZE_WALLET` action writes state to the blockchain, but the log-trigger step (Step 4) is skipped. On-chain state can be verified directly via `Token.isFrozen(address)`.
+From repo root:
+
+Install:
+
+```bash
+npm --prefix contracts install
+```
+
+Compile:
+
+```bash
+npm --prefix contracts run compile
+```
+
+Full deploy (standard):
+
+```bash
+npm --prefix contracts run deploy:equity:new
+```
+
+Full deploy in local testing mode (receiver forwarder bypass):
+
+```bash
+npm --prefix contracts run deploy:equity:new:test-mode
+```
+
+ACE policy setup/verification for vault registration:
+
+```bash
+npm --prefix contracts run ace:setup-policy
+```
+
+## Important Operational Notes
+
+- `SYNC_REDEEM_TICKET` is intentionally disabled in receiver to prevent server-side redemption.
+  Final redeem is executed by end-user wallet via `vault.withdrawWithTicket(token, amount, ticket)`.
+- The current snapshot was deployed with `testModeForwarderBypass=true`.
+  This is useful for local simulation and direct `onReport` tests, not production hardening.
+- Refund accounting in `PrivateRoundsMarket` releases both round sold capacity and investor purchased capacity.
+
+## Visual Architecture
+
+- Solidity architecture diagram: `../../equity_solidity_architecture.svg`
+- System architecture diagram: `../../equity_cre_architecture.svg`
