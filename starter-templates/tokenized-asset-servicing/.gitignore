@@ -20,6 +20,8 @@ bun.lockb
 
 # Configuration
 config.json
+EquityWorkflowCre/config.staging.json
+EquityWorkflowCre/config.production.json
 
 # Hardhat
 artifacts/
