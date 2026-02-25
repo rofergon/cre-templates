@@ -1,122 +1,229 @@
-# Chainlink CRE Equity Servicing Workflow
+# Tokenized Asset Servicing (CRE + ERC-3643 + ACE)
 
-This repository demonstrates the integration of the **Chainlink Runtime Environment (CRE)** to enable bidirectional synchronization between off-chain Web2 systems (such as HR databases or AWS Lambda functions) and an on-chain **ERC-3643 Equity Protocol**.
+End-to-end reference implementation for a tokenized equity protocol with:
+- ERC-3643 style compliance and identity controls.
+- Chainlink CRE workflow for Web2 <-> Onchain synchronization.
+- Chainlink ACE private rail (private balances, private transfers, withdraw ticket redemption).
+- Issuer-custodied private rounds market with USDC escrow and settlement/refund lifecycle.
 
-By leveraging Chainlink CRE's **LogTrigger** and **HTTP Abilities**, the architecture seamlessly orchestrates Web2 data changes to the blockchain and captures on-chain events for off-chain persistence, tracking the full lifecycle of tokenized equity and grants without sacrificing true decentralization.
+This repository is currently operated in local simulation mode for workflow execution and testing.
+
+## Current Network and Deployment
+
+Network: Ethereum Sepolia (chainId 11155111)
+Deployment snapshot file: `contracts/deployments/equity-latest.sepolia.json`
+Deployed at: `2026-02-25T00:05:26.113Z`
+
+### Core Addresses (latest snapshot)
+
+| Component | Address |
+|---|---|
+| CRE Forwarder (Sepolia) | `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5` |
+| ACE Vault (official demo) | `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13` |
+| EquityWorkflowReceiver | `0x1C312E03A316Eab45e468bf3a0F8171873cd2188` |
+| IdentityRegistry | `0x032a3Be70148aE44C362345271485C917eb73355` |
+| ComplianceV2 | `0xEEd878eeA3D23095d5c1939471b0b130f4d9c265` |
+| Token (ERC-3643 rail) | `0x1Cd2325cB59A13ED00B7e703f8f052C69943170e` |
+| PrivateEmployeeEquity | `0x853b8cd153BBB7340489F530FA9968DE7Cb2AAb2` |
+| PrivateRoundsMarket | `0x39a7b9Bcd125B1396BFfb5aF828bDe229F87C544` |
+| MockUSDC (6d) | `0x58384dFD613F0B8408b4197A031ED1E36F55868c` |
+| Treasury | `0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38` |
+| ACE Policy Engine | `0x49e337bc25b3e957bF9Ca8165666f2147b61669f` |
 
 ## Architecture
 
-The project relies on a comprehensive architecture that delegates responsibilities across Web2 infrastructure, the Chainlink Decentralized Oracle Network (DON), and Web3 Smart Contracts on the Base Sepolia network.
+### 1) CRE workflow (`EquityWorkflowCre/main.ts`)
 
-### 1. Equity Servicing Architecture (End-to-End)
+The workflow supports both HTTP-triggered writes and log-triggered sync back to Lambda.
 
-![Equity Architecture](./equity_cre_architecture.svg)
+Onchain actions (actionType 0..17):
+- `SYNC_KYC` (0)
+- `SYNC_EMPLOYMENT_STATUS` (1)
+- `SYNC_GOAL` (2)
+- `SYNC_FREEZE_WALLET` (3)
+- `SYNC_PRIVATE_DEPOSIT` (4)
+- `SYNC_BATCH` (5)
+- `SYNC_REDEEM_TICKET` (6, disabled by design)
+- `SYNC_MINT` (7)
+- `SYNC_SET_CLAIM_REQUIREMENTS` (8)
+- `SYNC_SET_INVESTOR_AUTH` (9)
+- `SYNC_SET_INVESTOR_LOCKUP` (10)
+- `SYNC_CREATE_ROUND` (11)
+- `SYNC_SET_ROUND_ALLOWLIST` (12)
+- `SYNC_OPEN_ROUND` (13)
+- `SYNC_CLOSE_ROUND` (14)
+- `SYNC_MARK_PURCHASE_SETTLED` (15)
+- `SYNC_REFUND_PURCHASE` (16)
+- `SYNC_SET_TOKEN_COMPLIANCE` (17)
 
-This diagram visualizes the overarching integration:
-- **Web2 / Corporate APIs**: HR dashboards and Lambda functions serving as the source of truth for employee data.
-- **Chainlink CRE (Decentralized Workflow Runner)**: The `main.ts` TypeScript workflow that handles ABI encoding/decoding and decentralized consensus, listening to both HTTP APIs (outbound Web2) and EVM Logs (inbound Web3).
-- **Web3 / On-Chain**: The receiver contract routing data to the core ERC-3643 asset protocol.
+ACE API actions from CRE:
+- `ACE_GENERATE_SHIELDED_ADDRESS`
+- `ACE_PRIVATE_TRANSFER`
+- `ACE_WITHDRAW_TICKET`
 
-### 2. Smart Contract Architecture (Solidity)
+ACE API base used by default:
+- `https://convergence2026-token-api.cldev.cloud`
 
-![Solidity Architecture](./equity_solidity_architecture.svg)
+### 2) Onchain protocol (`contracts/equity-protocol`)
 
-The on-chain layer (`contracts/equity-protocol`) consists of an implementation of the **ERC-3643 Tokenized Asset standard**, customized for equity vesting:
-- **`IdentityRegistry.sol`**: Manages KYC status and geographic compliance (`setCountry`, `isVerified`).
-- **`EmployeeVesting.sol`**: Governs employee stats, goal achievements, and vesting schedules. Includes the `claim()` logic which initiates transfers.
-- **`Token.sol` (ERC-3643)**: The core equity token with built-in transfer validation and wallet freezing capabilities.
-- **`Compliance.sol`**: Enforces strict `canTransfer` rules before token transfers are approved.
-- **`EquityWorkflowReceiver.sol`**: The entry point for Chainlink CRE transactions (`writeReport(bytes)`), routing the ABI-decoded instructions to the appropriate protocol contracts.
+Main contracts:
+- `IdentityRegistry.sol`: KYC identity and country state.
+- `Token.sol`: ERC-3643-like token with freeze, mint, burn, forced transfer.
+- `ComplianceV2.sol`: global transfer policy:
+  - verified identities required,
+  - authorized-investor gating,
+  - lockup enforcement,
+  - trusted counterparties,
+  - mint restricted to authorized/trusted verified receivers.
+- `PrivateEmployeeEquity.sol`: employment/goal/cliff gating + ACE vault deposit rail.
+- `PrivateRoundsMarket.sol`: private rounds with allowlist caps, USDC escrow, purchase states (`PENDING`, `SETTLED`, `REFUNDED`), settlement/refund paths.
+- `EquityWorkflowReceiver.sol`: single CRE entry point that dispatches all action types.
 
-### 3. Chainlink CRE Internal Workflow Logic
+### 3) Lambda backend (`lambda-function/index.mjs`)
 
-![CRE Internal Workflow](./cre_internal_workflow.svg)
+Persists state in DynamoDB and can trigger CRE sync payloads for:
+- employee state,
+- investor authorization/lockup,
+- rounds and allowlists,
+- purchase settlement/refund idempotency.
 
-The Chainlink CRE workflow (`EquityWorkflowCre/main.ts`) runs a two-way synchronization bridge:
-- **Web2 to Web3 (HTTP Trigger $\rightarrow$ EVM Client)**: 
-  A webhook (`POST JSON`) is received by CRE containing operations like `SYNC_KYC` or `SYNC_EMPLOYMENT_STATUS`. It is validated via Zod, compiled into a transaction instruction, processed through decentralized consensus, and finally broadcast to the `EquityWorkflowReceiver.sol` on-chain.
-- **Web3 to Web2 (EVM Log Trigger $\rightarrow$ HTTP Client)**: 
-  Smart contract events such as `GrantCreated`, `TokensClaimed`, or `IdentityRegistered` trigger the workflow. CRE decodes the logs and forwards the structured event data as a webhook to the AWS Lambda backend for DynamoDB persistence.
+## End-to-end Flows
 
-## Supported Sync Actions (Off-Chain $\rightarrow$ On-Chain)
+### A) Employee compliance + ACE ticket redemption
 
-The HTTP Trigger accepts JSON payloads to synchronize corporate states.
-Supported actions include:
-- `SYNC_KYC`
-- `SYNC_EMPLOYMENT_STATUS`
-- `SYNC_GOAL`
-- `SYNC_FREEZE_WALLET`
+1. Company updates employee state in Lambda.
+2. CRE executes onchain sync (KYC, freeze, requirements, etc.).
+3. Admin deposits token liquidity into ACE vault via private rail.
+4. Private transfer in ACE from admin to employee.
+5. Employee requests withdraw ticket from ACE API.
+6. Employee redeems onchain with `vault.withdrawWithTicket(token, amount, ticket)`.
 
-Example payload for `SYNC_KYC`:
-```json
-{
-  "action": "SYNC_KYC",
-  "employeeAddress": "0x1111111111111111111111111111111111111111",
-  "verified": true,
-  "identityAddress": "0x2222222222222222222222222222222222222222",
-  "country": 840
-}
-```
+Script:
+- `npm --prefix EquityWorkflowCre run test:lambda-cre-ace-ticket`
 
-## Supported Event Forwarding (On-Chain $\rightarrow$ Off-Chain)
+### B) Private rounds market (issuer custody)
 
-The EVM Log Trigger listens to the following events and `POST`s them to the backend API (`config.url`):
-- `IdentityRegistered` / `IdentityRemoved`
-- `CountryUpdated`
-- `GrantCreated` / `GrantRevoked`
-- `TokensClaimed`
-- `EmploymentStatusUpdated`
-- `GoalUpdated`
+1. KYC and investor authorization synced onchain.
+2. Round is created/opened and allowlist caps are configured.
+3. Investor buys with USDC (`buyRound`) -> purchase `PENDING`.
+4. Oracle marks settlement (`SYNC_MARK_PURCHASE_SETTLED`) after ACE private delivery.
+5. If settlement fails/expires, refund path is executed (`SYNC_REFUND_PURCHASE` / buyer timeout).
+6. Global resale restrictions enforced by `ComplianceV2`.
 
-## Getting Started
+Script:
+- `npm --prefix EquityWorkflowCre run test:private-rounds-market`
 
-### Prerequisites
-- Node.js (v18+) and Bun package manager.
-- Chainlink CRE CLI installed and logged in.
-- Hardhat / Foundry for deploying the `.sol` protocol.
-- Sepolia ETH for gas.
+## Prerequisites
 
-### 1. Deploy the Equity Protocol
-Navigate to the `contracts` directory, install dependencies, and run the deployment script. Note the addresses of the deployed `IdentityRegistry`, `EmployeeVesting`, and `EquityWorkflowReceiver`.
+- Node.js 18+
+- npm
+- CRE CLI installed and authenticated
+- Sepolia ETH for signer wallets
+- AWS account + Lambda URL + DynamoDB table (for backend integration)
 
-### 2. Configure the CRE Workflow
-Modify `config.staging.json` inside the `EquityWorkflowCre` directory:
-- `url`: Your backend / AWS Lambda endpoint.
-- `receiverAddress`: Address of your `EquityWorkflowReceiver.sol`.
-- `identityRegistryAddress`: Address of your `IdentityRegistry.sol`.
-- `employeeVestingAddress`: Address of your `EmployeeVesting.sol`.
+Optional:
+- Foundry (for ACE policy engine flows under `ace-private-transfers`)
 
-### 3. Simulate Workflow Locally
-Run the workflow simulation locally to dry-run changes before committing them on-chain.
+## Environment Setup
+
+Create `.env` from `.env.example` at repo root.
+
+Minimum variables for main E2E:
+- `CRE_ETH_PRIVATE_KEY`
+- `CRE_EMPLOYEE_ETH_PRIVATE_KEY`
+- `LAMBDA_URL`
+- `SEPOLIA_RPC_URL` (optional, defaults are present in scripts)
+
+Useful optional variables:
+- `STRICT_ONCHAIN_KYC=false` (for local simulation only)
+- `ACE_E2E_AMOUNT_WEI`
+- `ACE_EMPLOYEE_MIN_GAS_WEI`
+- `ACE_POLICY_ENGINE_ADDRESS`
+- `PRIVATE_ROUNDS_SETTLEMENT_TIMEOUT_SECONDS`
+
+## Install
+
 ```bash
-cd EquityWorkflowCre
-cre workflow simulate ./EquityWorkflowCre --target local-simulation
+npm --prefix contracts install
+npm --prefix EquityWorkflowCre install
+npm --prefix lambda-function install
+npm --prefix ace-private-transfers/api-scripts install
 ```
 
-*(Note: Without the `--broadcast` flag, writes are dry-run only. Transactions will reflect a hash of `0x`).*
+## Build and Deploy
 
-### 4. Interactive Test Runner
-Use the interactive CLI to execute sync actions with custom data, or run the full automated round-trip test:
+Compile contracts:
 
 ```bash
-cd EquityWorkflowCre
-node tests/run-tests.mjs
+npm --prefix contracts run compile
 ```
 
-The menu lets you:
-- **Register/Update Employee** (`SYNC_KYC`) — enter wallet, identity, country, KYC status
-- **Update Employment Status** — activate or terminate an employee
-- **Update Performance Goal** — mark goals as achieved
-- **Freeze/Unfreeze Wallet** — freeze wallets on the ERC-3643 Token
-- **Full 3-Tier Automated Test** — runs the complete round-trip with default data
-- **Read Employee Record** — query DynamoDB without on-chain interaction
-- **List All Employees** — fetch and display a table of all registered employees in DynamoDB without on-chain interaction
+Full redeploy (standard):
 
-Each option follows the full flow: **Lambda → CRE → Blockchain → CRE → Lambda → DynamoDB**.
+```bash
+npm --prefix contracts run deploy:equity:new
+```
 
-This requires `LAMBDA_URL` and `CRE_ETH_PRIVATE_KEY` in your `.env` file, along with a properly configured `config.staging.json`.
+Full redeploy in local testing mode (forwarder bypass + auto config/env updates):
 
-## Troubleshooting
+```bash
+npm --prefix contracts run deploy:equity:new:test-mode
+```
 
-- **Contract Execution Reverts**: Verify that `EquityWorkflowReceiver.sol` has full ownership permissions for the `IdentityRegistry` and `Token` contracts, and oracle-authorization on the `EmployeeVesting` contract.
-- **Workflow Build Issues**: Ensure `@chainlink/cre-sdk` is correctly installed. Ensure all TypeScript definitions (`main.ts`) comply with your deployed Solc compiler's ABI structure.
+Register/update ACE policy for token in official ACE vault:
+
+```bash
+npm --prefix contracts run ace:setup-policy
+```
+
+## CRE Workflow Commands
+
+Local simulation compile/run:
+
+```bash
+cre workflow simulate ./EquityWorkflowCre --target local-simulation --non-interactive --trigger-index 0
+```
+
+Broadcast a payload to onchain receiver from local simulation:
+
+```bash
+node -e "const {spawnSync}=require('child_process'); const p=JSON.stringify({action:'SYNC_KYC',employeeAddress:'0xYourAddress',verified:true,identityAddress:'0x00000000000000000000000000000000000000E5',country:840}); const r=spawnSync('cre',['workflow','simulate','./EquityWorkflowCre','--target','local-simulation','--non-interactive','--trigger-index','0','--http-payload',p,'--broadcast'],{encoding:'utf8'}); console.log(r.stdout); console.error(r.stderr); process.exit(r.status||0);"
+```
+
+## Test Commands
+
+CRE and protocol E2E:
+
+```bash
+npm --prefix EquityWorkflowCre run test:sync-write
+npm --prefix EquityWorkflowCre run test:lambda-sync
+npm --prefix EquityWorkflowCre run test:lambda-cre-ace-ticket
+npm --prefix EquityWorkflowCre run test:private-rounds-market
+```
+
+Lambda unit tests:
+
+```bash
+npm --prefix lambda-function test
+```
+
+## Local Simulation Notes
+
+- Current deployed snapshot was generated with `testModeForwarderBypass=true`.
+- `SYNC_REDEEM_TICKET` is intentionally disabled in receiver. Ticket redeem must be executed by the employee wallet directly on ACE vault.
+- `EquityWorkflowCre/config.staging.json` and `config.production.json` are now git-ignored locally to avoid leaking Lambda URLs.
+- `secrets.yaml` is only required for deployed CRE targets. For local simulation, config + `.env` are sufficient.
+
+## Diagrams
+
+- Full architecture: `equity_cre_architecture.svg`
+- Solidity architecture: `equity_solidity_architecture.svg`
+- CRE internal flow: `cre_internal_workflow.svg`
+- ACE ticket flow: `cre_lambda_ace_ticket_workflow.svg`
+- Private market flow: `equity_private_market_liquidity.svg`
+
+## Known Boundaries
+
+- USDC payment leg is public onchain in this phase.
+- ACE privacy is applied to the token leg (private balances/transfers/tickets), not USDC.
+- This repo is configured for Sepolia testing and demo workflows, not production hardening.
