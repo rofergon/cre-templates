@@ -3,14 +3,18 @@
   "aceApiUrl": "https://convergence2026-token-api.cldev.cloud",
   "evms": [
     {
-      "receiverAddress": "0x677Fb566538E7A7bB6C7a0bc5053b14b4fEa7306",
-      "identityRegistryAddress": "0x1f82FdeDf1486306fF1a0FB394d628e30338d478",
-      "acePrivacyManagerAddress": "0xf92757eb7ee100F387290745B044cD0616669fC2",
+      "receiverAddress": "0x1C312E03A316Eab45e468bf3a0F8171873cd2188",
+      "identityRegistryAddress": "0x032a3Be70148aE44C362345271485C917eb73355",
+      "acePrivacyManagerAddress": "0x853b8cd153BBB7340489F530FA9968DE7Cb2AAb2",
       "aceVaultAddress": "0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13",
       "aceChainId": 11155111,
-      "tokenAddress": "0x5C7165B57678613744D6f38ceb51c0163cB8534A",
+      "tokenAddress": "0x1Cd2325cB59A13ED00B7e703f8f052C69943170e",
       "chainSelectorName": "ethereum-testnet-sepolia",
-      "gasLimit": "1000000"
+      "gasLimit": "1000000",
+      "complianceV2Address": "0xEEd878eeA3D23095d5c1939471b0b130f4d9c265",
+      "privateRoundsMarketAddress": "0x39a7b9Bcd125B1396BFfb5aF828bDe229F87C544",
+      "usdcAddress": "0x58384dFD613F0B8408b4197A031ED1E36F55868c",
+      "treasuryAddress": "0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38"
     }
   ]
 }
