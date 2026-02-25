@@ -32,6 +32,10 @@ const configSchema = z.object({
         receiverAddress: z.string(),
         identityRegistryAddress: z.string(),
         acePrivacyManagerAddress: z.string(),
+        complianceV2Address: z.string().optional(),
+        privateRoundsMarketAddress: z.string().optional(),
+        usdcAddress: z.string().optional(),
+        treasuryAddress: z.string().optional(),
         aceVaultAddress: z.string(),
         aceChainId: z.coerce.number().int().positive().optional(),
         chainSelectorName: z.string(),
@@ -47,6 +51,7 @@ type Config = z.infer<typeof configSchema>;
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 const bytes32Schema = z.string().regex(/^0x[a-fA-F0-9]{64}$/);
 const timestampSchema = z.coerce.number().int().positive();
+const uint256Schema = z.coerce.bigint().min(0n);
 
 const syncKycSchema = z.object({
   action: z.literal("SYNC_KYC"),
@@ -100,6 +105,61 @@ const syncRedeemTicketSchema = z.object({
   ticket: z.string(),
 });
 
+const syncSetInvestorAuthSchema = z.object({
+  action: z.literal("SYNC_SET_INVESTOR_AUTH"),
+  investorAddress: addressSchema,
+  authorized: z.boolean(),
+});
+
+const syncSetInvestorLockupSchema = z.object({
+  action: z.literal("SYNC_SET_INVESTOR_LOCKUP"),
+  investorAddress: addressSchema,
+  lockupUntil: z.coerce.number().int().min(0).max(2 ** 32 - 1),
+});
+
+const syncCreateRoundSchema = z.object({
+  action: z.literal("SYNC_CREATE_ROUND"),
+  roundId: uint256Schema,
+  startTime: z.coerce.number().int().min(0).max(2 ** 32 - 1),
+  endTime: z.coerce.number().int().min(0).max(2 ** 32 - 1),
+  tokenPriceUsdc6: uint256Schema,
+  maxUsdc: uint256Schema,
+});
+
+const syncSetRoundAllowlistSchema = z.object({
+  action: z.literal("SYNC_SET_ROUND_ALLOWLIST"),
+  roundId: uint256Schema,
+  investorAddress: addressSchema,
+  capUsdc: uint256Schema,
+});
+
+const syncOpenRoundSchema = z.object({
+  action: z.literal("SYNC_OPEN_ROUND"),
+  roundId: uint256Schema,
+});
+
+const syncCloseRoundSchema = z.object({
+  action: z.literal("SYNC_CLOSE_ROUND"),
+  roundId: uint256Schema,
+});
+
+const syncMarkPurchaseSettledSchema = z.object({
+  action: z.literal("SYNC_MARK_PURCHASE_SETTLED"),
+  purchaseId: uint256Schema,
+  aceTransferRef: bytes32Schema,
+});
+
+const syncRefundPurchaseSchema = z.object({
+  action: z.literal("SYNC_REFUND_PURCHASE"),
+  purchaseId: uint256Schema,
+  reason: bytes32Schema.optional(),
+});
+
+const syncSetTokenComplianceSchema = z.object({
+  action: z.literal("SYNC_SET_TOKEN_COMPLIANCE"),
+  complianceAddress: addressSchema,
+});
+
 const aceGenerateShieldedAddressSchema = z.object({
   action: z.literal("ACE_GENERATE_SHIELDED_ADDRESS"),
   account: addressSchema.optional(),
@@ -133,6 +193,15 @@ const onchainBaseSyncInputSchema = z.discriminatedUnion("action", [
   syncPrivateDepositSchema,
   syncMintSchema,
   syncRedeemTicketSchema,
+  syncSetInvestorAuthSchema,
+  syncSetInvestorLockupSchema,
+  syncCreateRoundSchema,
+  syncSetRoundAllowlistSchema,
+  syncOpenRoundSchema,
+  syncCloseRoundSchema,
+  syncMarkPurchaseSettledSchema,
+  syncRefundPurchaseSchema,
+  syncSetTokenComplianceSchema,
 ]);
 
 const syncBatchSchema = z.object({
@@ -149,6 +218,15 @@ const onchainSyncInputSchema = z.discriminatedUnion("action", [
   syncPrivateDepositSchema,
   syncMintSchema,
   syncRedeemTicketSchema,
+  syncSetInvestorAuthSchema,
+  syncSetInvestorLockupSchema,
+  syncCreateRoundSchema,
+  syncSetRoundAllowlistSchema,
+  syncOpenRoundSchema,
+  syncCloseRoundSchema,
+  syncMarkPurchaseSettledSchema,
+  syncRefundPurchaseSchema,
+  syncSetTokenComplianceSchema,
   syncBatchSchema,
 ]);
 
@@ -183,6 +261,15 @@ const ACTION_TYPE = {
   SYNC_REDEEM_TICKET: 6,
   SYNC_MINT: 7,
   SYNC_SET_CLAIM_REQUIREMENTS: 8,
+  SYNC_SET_INVESTOR_AUTH: 9,
+  SYNC_SET_INVESTOR_LOCKUP: 10,
+  SYNC_CREATE_ROUND: 11,
+  SYNC_SET_ROUND_ALLOWLIST: 12,
+  SYNC_OPEN_ROUND: 13,
+  SYNC_CLOSE_ROUND: 14,
+  SYNC_MARK_PURCHASE_SETTLED: 15,
+  SYNC_REFUND_PURCHASE: 16,
+  SYNC_SET_TOKEN_COMPLIANCE: 17,
 } as const;
 
 const DEFAULT_ACE_API_URL = "https://convergence2026-token-api.cldev.cloud";
@@ -227,8 +314,18 @@ const eventAbi = parseAbi([
   "event IdentityRegistered(address indexed userAddress, address indexed identity, uint16 country)",
   "event IdentityRemoved(address indexed userAddress, address indexed identity)",
   "event CountryUpdated(address indexed userAddress, uint16 country)",
+  "event EmploymentStatusUpdated(address indexed employee, bool employed)",
+  "event GoalUpdated(bytes32 indexed goalId, bool achieved)",
   "event PrivateDeposit(uint256 amount)",
   "event TicketRedeemed(address indexed redeemer, uint256 amount)",
+  "event InvestorAuthorizationUpdated(address indexed investor, bool authorized)",
+  "event InvestorLockupUpdated(address indexed investor, uint64 lockupUntil)",
+  "event RoundCreated(uint256 indexed roundId, uint64 startTime, uint64 endTime, uint256 tokenPriceUsdc6, uint256 maxUsdc)",
+  "event RoundOpened(uint256 indexed roundId)",
+  "event RoundClosed(uint256 indexed roundId)",
+  "event PurchaseRequested(uint256 indexed purchaseId, uint256 indexed roundId, address indexed buyer, uint256 usdcAmount, bytes32 aceRecipientCommitment)",
+  "event PurchaseSettled(uint256 indexed purchaseId, bytes32 indexed aceTransferRef, uint256 usdcAmount, address treasury)",
+  "event PurchaseRefunded(uint256 indexed purchaseId, address indexed buyer, uint256 usdcAmount, bytes32 reason)",
 ]);
 
 const normalizePrivateKey = (privateKey: string): `0x${string}` => {
@@ -302,10 +399,6 @@ const postDataWithBody = (
     body,
     headers: {
       "Content-Type": "application/json",
-    },
-    cacheSettings: {
-      store: true,
-      maxAge: "30s",
     },
   };
 
@@ -399,6 +492,90 @@ const buildInstruction = (input: OnchainSyncInput): { actionType: number; payloa
 
       return {
         actionType: ACTION_TYPE.SYNC_SET_CLAIM_REQUIREMENTS,
+        payload,
+      };
+    }
+    case "SYNC_SET_INVESTOR_AUTH": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address investor, bool authorized"),
+        [getAddress(input.investorAddress), input.authorized],
+      );
+      return {
+        actionType: ACTION_TYPE.SYNC_SET_INVESTOR_AUTH,
+        payload,
+      };
+    }
+    case "SYNC_SET_INVESTOR_LOCKUP": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address investor, uint64 lockupUntil"),
+        [getAddress(input.investorAddress), BigInt(input.lockupUntil)],
+      );
+      return {
+        actionType: ACTION_TYPE.SYNC_SET_INVESTOR_LOCKUP,
+        payload,
+      };
+    }
+    case "SYNC_CREATE_ROUND": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("uint256 roundId, uint64 startTime, uint64 endTime, uint256 tokenPriceUsdc6, uint256 maxUsdc"),
+        [input.roundId, BigInt(input.startTime), BigInt(input.endTime), input.tokenPriceUsdc6, input.maxUsdc],
+      );
+      return {
+        actionType: ACTION_TYPE.SYNC_CREATE_ROUND,
+        payload,
+      };
+    }
+    case "SYNC_SET_ROUND_ALLOWLIST": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("uint256 roundId, address investor, uint256 capUsdc"),
+        [input.roundId, getAddress(input.investorAddress), input.capUsdc],
+      );
+      return {
+        actionType: ACTION_TYPE.SYNC_SET_ROUND_ALLOWLIST,
+        payload,
+      };
+    }
+    case "SYNC_OPEN_ROUND": {
+      const payload = encodeAbiParameters(parseAbiParameters("uint256 roundId"), [input.roundId]);
+      return {
+        actionType: ACTION_TYPE.SYNC_OPEN_ROUND,
+        payload,
+      };
+    }
+    case "SYNC_CLOSE_ROUND": {
+      const payload = encodeAbiParameters(parseAbiParameters("uint256 roundId"), [input.roundId]);
+      return {
+        actionType: ACTION_TYPE.SYNC_CLOSE_ROUND,
+        payload,
+      };
+    }
+    case "SYNC_MARK_PURCHASE_SETTLED": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("uint256 purchaseId, bytes32 aceTransferRef"),
+        [input.purchaseId, input.aceTransferRef as `0x${string}`],
+      );
+      return {
+        actionType: ACTION_TYPE.SYNC_MARK_PURCHASE_SETTLED,
+        payload,
+      };
+    }
+    case "SYNC_REFUND_PURCHASE": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("uint256 purchaseId, bytes32 reason"),
+        [input.purchaseId, (input.reason ?? "0x0000000000000000000000000000000000000000000000000000000000000000") as `0x${string}`],
+      );
+      return {
+        actionType: ACTION_TYPE.SYNC_REFUND_PURCHASE,
+        payload,
+      };
+    }
+    case "SYNC_SET_TOKEN_COMPLIANCE": {
+      const payload = encodeAbiParameters(
+        parseAbiParameters("address complianceAddress"),
+        [getAddress(input.complianceAddress)],
+      );
+      return {
+        actionType: ACTION_TYPE.SYNC_SET_TOKEN_COMPLIANCE,
         payload,
       };
     }
@@ -642,6 +819,18 @@ const buildLambdaPayloadFromLog = (
         employeeAddress: String(args.userAddress),
         country: Number(args.country),
       };
+    case "EmploymentStatusUpdated":
+      return {
+        action: "EmploymentStatusUpdated",
+        employeeAddress: String(args.employee),
+        employed: Boolean(args.employed),
+      };
+    case "GoalUpdated":
+      return {
+        action: "GoalUpdated",
+        goalId: String(args.goalId),
+        achieved: Boolean(args.achieved),
+      };
     case "PrivateDeposit":
       return {
         action: "PrivateDeposit",
@@ -652,6 +841,62 @@ const buildLambdaPayloadFromLog = (
         action: "TicketRedeemed",
         employeeAddress: String(args.redeemer),
         amount: String(args.amount),
+      };
+    case "InvestorAuthorizationUpdated":
+      return {
+        action: "InvestorAuthorizationUpdated",
+        investorAddress: String(args.investor),
+        authorized: Boolean(args.authorized),
+      };
+    case "InvestorLockupUpdated":
+      return {
+        action: "InvestorLockupUpdated",
+        investorAddress: String(args.investor),
+        lockupUntil: Number(args.lockupUntil),
+      };
+    case "RoundCreated":
+      return {
+        action: "RoundCreated",
+        roundId: String(args.roundId),
+        startTime: Number(args.startTime),
+        endTime: Number(args.endTime),
+        tokenPriceUsdc6: String(args.tokenPriceUsdc6),
+        maxUsdc: String(args.maxUsdc),
+      };
+    case "RoundOpened":
+      return {
+        action: "RoundOpened",
+        roundId: String(args.roundId),
+      };
+    case "RoundClosed":
+      return {
+        action: "RoundClosed",
+        roundId: String(args.roundId),
+      };
+    case "PurchaseRequested":
+      return {
+        action: "PurchaseRequested",
+        purchaseId: String(args.purchaseId),
+        roundId: String(args.roundId),
+        buyer: String(args.buyer),
+        usdcAmount: String(args.usdcAmount),
+        aceRecipientCommitment: String(args.aceRecipientCommitment),
+      };
+    case "PurchaseSettled":
+      return {
+        action: "PurchaseSettled",
+        purchaseId: String(args.purchaseId),
+        aceTransferRef: String(args.aceTransferRef),
+        usdcAmount: String(args.usdcAmount),
+        treasury: String(args.treasury),
+      };
+    case "PurchaseRefunded":
+      return {
+        action: "PurchaseRefunded",
+        purchaseId: String(args.purchaseId),
+        buyer: String(args.buyer),
+        usdcAmount: String(args.usdcAmount),
+        reason: String(args.reason),
       };
     default:
       return null;
@@ -740,21 +985,23 @@ const initWorkflow = (config: Config) => {
   const onHTTPTriggerWithClient = (runtime: Runtime<Config>, payload: HTTPPayload): Promise<string> =>
     onHTTPTrigger(runtime, evmClient, payload);
 
-  return [
-    cre.handler(httpTrigger.trigger({}), onHTTPTriggerWithClient),
+  const triggerAddresses = new Set<string>([
+    evmConfig.identityRegistryAddress,
+    evmConfig.acePrivacyManagerAddress,
+  ]);
+  if (evmConfig.complianceV2Address) triggerAddresses.add(evmConfig.complianceV2Address);
+  if (evmConfig.privateRoundsMarketAddress) triggerAddresses.add(evmConfig.privateRoundsMarketAddress);
+
+  const logHandlers = [...triggerAddresses].map((address) =>
     cre.handler(
       evmClient.logTrigger({
-        addresses: [hexToBase64(evmConfig.identityRegistryAddress)],
+        addresses: [hexToBase64(address)],
       }),
       onLogTrigger,
     ),
-    cre.handler(
-      evmClient.logTrigger({
-        addresses: [hexToBase64(evmConfig.acePrivacyManagerAddress)],
-      }),
-      onLogTrigger,
-    ),
-  ];
+  );
+
+  return [cre.handler(httpTrigger.trigger({}), onHTTPTriggerWithClient), ...logHandlers];
 };
 
 export async function main() {
