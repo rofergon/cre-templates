@@ -67,6 +67,9 @@ const ACTION_TYPE = {
   SYNC_FREEZE_WALLET: 3,
   SYNC_MINT: 7,
   SYNC_SET_CLAIM_REQUIREMENTS: 8,
+  SYNC_SET_INVESTOR_AUTH: 9,
+  SYNC_SET_INVESTOR_LOCKUP: 10,
+  SYNC_SET_TOKEN_COMPLIANCE: 17,
 };
 
 const IDENTITY_REGISTRY_ABI = [
@@ -347,10 +350,17 @@ const run = async () => {
 
   const identityRegistryAddress = evmConfig.identityRegistryAddress;
   const privateEquityAddress = evmConfig.acePrivacyManagerAddress;
+  const complianceV2Address =
+    process.env.COMPLIANCE_V2_ADDRESS ||
+    envFromFile.COMPLIANCE_V2_ADDRESS ||
+    process.env.COMPLIANCE_ADDRESS ||
+    envFromFile.COMPLIANCE_ADDRESS ||
+    evmConfig.complianceV2Address;
   const receiverAddress = evmConfig.receiverAddress;
   if (!tokenAddress) throw new Error("Missing tokenAddress (config or TOKEN_ADDRESS)");
   if (!identityRegistryAddress) throw new Error("Missing identityRegistryAddress in config");
   if (!privateEquityAddress) throw new Error("Missing acePrivacyManagerAddress in config");
+  if (!complianceV2Address) throw new Error("Missing complianceV2Address (config or COMPLIANCE_V2_ADDRESS)");
   if (!receiverAddress) throw new Error("Missing receiverAddress in config");
 
   const employeeIdentityAddress =
@@ -506,6 +516,39 @@ const run = async () => {
       ]);
     }
 
+    if (payload.action === "SYNC_SET_INVESTOR_AUTH") {
+      const encodedPayload = encodeAbiParameters(
+        parseAbiParameters("address investor, bool authorized"),
+        [payload.investorAddress, payload.authorized],
+      );
+      return encodeAbiParameters(parseAbiParameters("uint8 actionType, bytes payload"), [
+        ACTION_TYPE.SYNC_SET_INVESTOR_AUTH,
+        encodedPayload,
+      ]);
+    }
+
+    if (payload.action === "SYNC_SET_INVESTOR_LOCKUP") {
+      const encodedPayload = encodeAbiParameters(
+        parseAbiParameters("address investor, uint64 lockupUntil"),
+        [payload.investorAddress, BigInt(payload.lockupUntil)],
+      );
+      return encodeAbiParameters(parseAbiParameters("uint8 actionType, bytes payload"), [
+        ACTION_TYPE.SYNC_SET_INVESTOR_LOCKUP,
+        encodedPayload,
+      ]);
+    }
+
+    if (payload.action === "SYNC_SET_TOKEN_COMPLIANCE") {
+      const encodedPayload = encodeAbiParameters(
+        parseAbiParameters("address complianceAddress"),
+        [payload.complianceAddress],
+      );
+      return encodeAbiParameters(parseAbiParameters("uint8 actionType, bytes payload"), [
+        ACTION_TYPE.SYNC_SET_TOKEN_COMPLIANCE,
+        encodedPayload,
+      ]);
+    }
+
     if (payload.action === "SYNC_MINT") {
       const encodedPayload = encodeAbiParameters(parseAbiParameters("address to, uint256 amount"), [
         payload.to,
@@ -646,6 +689,7 @@ const run = async () => {
   console.log(`Token:       ${tokenAddress}`);
   console.log(`Vault:       ${vaultAddress}`);
   console.log(`PrivateEq:   ${privateEquityAddress}`);
+  console.log(`Compliance:  ${complianceV2Address}`);
   console.log(`Receiver:    ${receiverAddress}`);
   console.log(`Report path: ${useDirectReceiverReports ? "direct onReport" : "CRE simulate"}`);
   console.log(`Amount:      ${amountWei.toString()} wei`);
@@ -678,6 +722,22 @@ const run = async () => {
     frozen: false,
   });
   console.log(`   SYNC_FREEZE_WALLET: ${freezeTxHash}`);
+
+  console.log("   Ensuring token compliance + investor authorization baseline...");
+  const setComplianceTx = await sendOnchainAction({
+    action: "SYNC_SET_TOKEN_COMPLIANCE",
+    complianceAddress: complianceV2Address,
+  });
+  console.log(`   SYNC_SET_TOKEN_COMPLIANCE: ${setComplianceTx}`);
+
+  for (const investorAddress of [admin.address, employee.address, vaultAddress, privateEquityAddress]) {
+    const authTx = await sendOnchainAction({
+      action: "SYNC_SET_INVESTOR_AUTH",
+      investorAddress,
+      authorized: true,
+    });
+    console.log(`   SYNC_SET_INVESTOR_AUTH(${investorAddress}): ${authTx}`);
+  }
 
   console.log("\n3) Verify employee onchain requirements...");
   const [isVerified, onchainIdentity, onchainCountry, isFrozen] = await Promise.all([
