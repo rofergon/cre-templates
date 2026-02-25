@@ -1,66 +1,157 @@
-## Foundry
+# ACE Private Transfers Toolkit
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This folder contains the ACE-specific tooling used by this project:
+- Foundry scripts to deploy/register policy engines and interact with the official ACE vault.
+- TypeScript API scripts to call ACE REST endpoints with EIP-712 signatures.
 
-Foundry consists of:
+Target network: Ethereum Sepolia (`11155111`)
+Official ACE vault used here: `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
+ACE API base used by scripts: `https://convergence2026-token-api.cldev.cloud`
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Folder Structure
 
-## Documentation
+- `script/01_DeployPolicyEngine.s.sol`: deploy PolicyEngine proxy.
+- `script/02_ApproveVault.s.sol`: approve token spending by vault.
+- `script/03_RegisterVault.s.sol`: register token + policy engine in vault.
+- `script/04_DepositToVault.s.sol`: deposit token to vault.
+- `script/05_WithdrawWithTicket.s.sol`: redeem ticket onchain.
+- `script/SetupAll.s.sol`: one-shot setup (deploy policy + approve + register + deposit).
+- `api-scripts/src/*`: REST API helpers (`balances`, `shielded-address`, `private-transfer`, `withdraw`, `withdraw-and-redeem`).
 
-https://book.getfoundry.sh/
+## Prerequisites
 
-## Usage
+- Foundry (`forge`, `cast`)
+- Node.js 18+
+- Sepolia RPC URL
+- Private keys funded with Sepolia ETH
 
-### Build
+## Environment Variables
 
-```shell
-$ forge build
+Common:
+- `TOKEN_ADDRESS`: ERC-20 token address used with ACE vault.
+- `SEPOLIA_RPC_URL` or `ETH_RPC_URL`: Sepolia RPC endpoint.
+
+Foundry scripts:
+- `PRIVATE_KEY`: signer for deploy/register/deposit flows.
+- `POLICY_ENGINE_ADDRESS`: policy engine proxy address (for register flow).
+- `DEPOSIT_AMOUNT`: deposit amount (wei, optional).
+- `PRIVATE_KEY_2`: second signer (withdrawer for `05_WithdrawWithTicket`).
+- `WITHDRAW_AMOUNT`: withdraw amount in wei.
+- `TICKET`: ticket hex returned by `/withdraw`.
+
+API scripts:
+- `PRIVATE_KEY`: wallet used by `balances` and `private-transfer`.
+- `PRIVATE_KEY_2`: wallet used by `shielded-address` and `withdraw`.
+- `EMPLOYEE_PRIVATE_KEY`: preferred withdrawer key for `withdraw-and-redeem` (fallback to `PRIVATE_KEY_2`, then `PRIVATE_KEY`).
+
+## Shell Syntax Note
+
+Use the syntax for your shell:
+
+Bash/WSL:
+```bash
+export PRIVATE_KEY=0x...
+export ETH_RPC_URL=https://...
 ```
 
-### Test
-
-```shell
-$ forge test
+PowerShell:
+```powershell
+$env:PRIVATE_KEY="0x..."
+$env:ETH_RPC_URL="https://..."
 ```
 
-### Format
+## Foundry Usage
 
-```shell
-$ forge fmt
+From repo root:
+
+```bash
+cd ace-private-transfers
+forge build
 ```
 
-### Gas Snapshots
+### 1) Deploy Policy Engine Proxy
 
-```shell
-$ forge snapshot
+```bash
+forge script script/01_DeployPolicyEngine.s.sol:DeployPolicyEngine \
+  --rpc-url $ETH_RPC_URL \
+  --broadcast -vvvv
 ```
 
-### Anvil
+Take the printed proxy address and set it as `POLICY_ENGINE_ADDRESS`.
 
-```shell
-$ anvil
+### 2) Register Token + Policy Engine in ACE Vault
+
+```bash
+forge script script/03_RegisterVault.s.sol:RegisterVault \
+  --rpc-url $ETH_RPC_URL \
+  --broadcast -vvvv
 ```
 
-### Deploy
+### 3) Approve + Deposit Token into Vault
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+```bash
+forge script script/02_ApproveVault.s.sol:ApproveVault \
+  --rpc-url $ETH_RPC_URL \
+  --broadcast -vvvv
+
+forge script script/04_DepositToVault.s.sol:DepositToVault \
+  --rpc-url $ETH_RPC_URL \
+  --broadcast -vvvv
 ```
 
-### Cast
+### 4) Withdraw with Ticket Onchain
 
-```shell
-$ cast <subcommand>
+```bash
+forge script script/05_WithdrawWithTicket.s.sol:WithdrawWithTicket \
+  --rpc-url $ETH_RPC_URL \
+  --broadcast -vvvv
 ```
 
-### Help
+### One-shot Flow
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
+```bash
+forge script script/SetupAll.s.sol:SetupAll \
+  --rpc-url $ETH_RPC_URL \
+  --broadcast -vvvv
 ```
+
+## ACE API Scripts Usage
+
+Install:
+
+```bash
+cd ace-private-transfers/api-scripts
+npm install
+```
+
+Run scripts:
+
+```bash
+npm run balances
+npm run shielded-address
+npm run private-transfer -- <recipient> <token> <amount> [flags]
+npm run withdraw -- <token> <amount>
+npm run withdraw-and-redeem -- <token> <amount> [recipient]
+```
+
+Examples:
+
+```bash
+npm run private-transfer -- 0xRecipientOrShielded 0xToken 1000000 hide-sender
+npm run withdraw -- 0xToken 1000000
+npm run withdraw-and-redeem -- 0xToken 1000000
+```
+
+## Recommended Operational Flow
+
+1. Ensure token is registered in ACE vault with a policy engine.
+2. Deposit token liquidity to ACE vault.
+3. Use API `private-transfer` to move private balance.
+4. Use API `withdraw` to get ticket.
+5. Redeem onchain with `withdrawWithTicket` from the same account that requested the ticket.
+
+## Notes
+
+- Ticket expiry is 1 hour (ACE-side). If not redeemed, ACE refunds private balance.
+- `withdraw-and-redeem.ts` is the easiest end-to-end employee path for demo/testing.
+- This folder is for Sepolia demo/testing and not production hardening.
