@@ -1,21 +1,15 @@
 # Docs
 
-Indice de documentacion del proyecto.
+Project documentation index.
 
-## 1) Vista general
+## 21) Solidity protocol guide
 
-- `Docs/Documentacion-Integral.md`
+- `Docs/Solidity-Protocol.md`
 
-Incluye arquitectura completa, flujos end-to-end, operacion, seguridad, testing y roadmap tecnico.
+Includes contracts, functions, events, permissions, dependencies, deployment notes, and on-chain risks.
 
-## 2) Especializada: Protocolo Solidity
-
-- `Docs/Protocolo-Solidity.md`
-
-Incluye contratos, funciones, eventos, permisos, dependencias, despliegue y riesgos on-chain.
-
-## 3) Especializada: Workflow CRE Chainlink
+## 3) CRE workflow guide
 
 - `Docs/Workflow-CRE-Chainlink.md`
 
-Incluye triggers, schemas, encoding ABI, writeReport, log forwarding, simulacion y checklist operativo.
+Includes triggers, schemas, ABI encoding, `writeReport`, log forwarding, simulation, and operations checklist.
