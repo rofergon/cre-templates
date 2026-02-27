@@ -53,6 +53,31 @@ From `contracts/deployments/equity-latest.sepolia.json`:
 
 Default ACE API base: `https://convergence2026-token-api.cldev.cloud`
 
+## Confidential HTTP + Data Sensitivity Policy
+
+ACE and Confidential HTTP are complementary:
+- ACE preserves privacy onchain (private balances/transfers/tickets).
+- Confidential HTTP protects offchain HTTP API interactions.
+
+Current policy in `main.ts`:
+- ACE REST calls use `ConfidentialHTTPClient` by default (`privacy.enableConfidentialAce=true`).
+- Lambda sync remains standard HTTP, with payload validation and log redaction.
+
+### Sensitivity matrix
+
+| Route | Sensitivity | Transport | Notes |
+|---|---|---|---|
+| `POST {aceApiUrl}/shielded-address` | `IDENTIFIER` + `CREDENTIAL` | Confidential HTTP | Uses `encryptOutputAce` policy |
+| `POST {aceApiUrl}/private-transfer` | `IDENTIFIER` + `FINANCIAL` + `CREDENTIAL` | Confidential HTTP | Uses `encryptOutputAce` policy |
+| `POST {aceApiUrl}/withdraw` | `IDENTIFIER` + `FINANCIAL` + `CREDENTIAL` | Confidential HTTP | Uses `encryptOutputAce` policy |
+| `POST {LAMBDA_URL}` | Mostly `PUBLIC_ONCHAIN` + some identifiers | Standard HTTP | No credential fields allowed |
+
+`SensitivityCategory` used in code:
+- `CREDENTIAL`
+- `IDENTIFIER`
+- `FINANCIAL`
+- `PUBLIC_ONCHAIN`
+
 ## Forwarded Onchain Events -> Lambda
 
 `main.ts` decodes and forwards these events:
@@ -100,6 +125,25 @@ Files:
 - `evms[0].aceChainId` (optional)
 - `evms[0].chainSelectorName`
 - `evms[0].gasLimit`
+- `privacy.enableConfidentialAce` (optional, default `true`)
+- `privacy.encryptOutputAce` (optional, default `true`)
+- `privacy.redactLogs` (optional, default `true`)
+- `privacy.vaultDonSecrets[]` (optional): `{ key, owner?, namespace? }`
+
+Example:
+
+```json
+{
+  "privacy": {
+    "enableConfidentialAce": true,
+    "encryptOutputAce": true,
+    "redactLogs": true,
+    "vaultDonSecrets": [
+      { "key": "san_marino_aes_gcm_encryption_key" }
+    ]
+  }
+}
+```
 
 ## Secrets Behavior
 
@@ -108,6 +152,9 @@ Files:
   - falls back to `config.url`.
 - For ACE signer private key:
   - tries secrets in order: `ACE_API_SIGNER_PRIVATE_KEY`, `ACE_API_PRIVATE_KEY`, `PRIVATE_KEY`.
+- For Confidential HTTP (optional):
+  - use `privacy.vaultDonSecrets` to fetch Vault DON secrets.
+  - when `privacy.encryptOutputAce=true`, response encryption is enabled.
 
 In local simulation, `.env` + config are commonly used.
 
@@ -166,4 +213,5 @@ Common optional:
 
 - `SYNC_REDEEM_TICKET` is intentionally disabled in receiver.
   Use `ACE_WITHDRAW_TICKET` and redeem directly from employee wallet with `vault.withdrawWithTicket(...)`.
+- Confidential HTTP is experimental and currently targeted to CRE simulation workflows.
 - This workflow is currently operated for Sepolia/local-simulation validation and demos.
