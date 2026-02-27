@@ -276,16 +276,18 @@ const run = async () => {
     throw new Error("Transaction receipt not found");
   }
 
-  const identityLog = receipt.logs.find(
+  const eventIndex = receipt.logs.findIndex(
     (log) => log.address.toLowerCase() === identityRegistryAddress,
   );
 
-  if (!identityLog) {
+  if (eventIndex < 0) {
     throw new Error("No IdentityRegistry log found in receipt");
   }
 
-  const eventIndex = Number(identityLog.logIndex);
-  console.log(`   IdentityRegistry event index: ${eventIndex}`);
+  const identityLog = receipt.logs[eventIndex];
+  console.log(
+    `   IdentityRegistry event tx index: ${eventIndex} (global logIndex: ${identityLog.logIndex})`,
+  );
 
   console.log("3) Running CRE EVM Log trigger to sync onchain event -> Lambda...");
   await runCre([
