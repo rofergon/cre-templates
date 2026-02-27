@@ -3,6 +3,7 @@ import {
   consensusIdenticalAggregation,
   cre,
   getNetwork,
+  type ConfidentialHTTPSendRequester,
   type EVMLog,
   type HTTPPayload,
   type HTTPSendRequester,
@@ -24,6 +25,23 @@ import {
 } from "viem";
 import { z } from "zod";
 
+const privacyConfigSchema = z
+  .object({
+    enableConfidentialAce: z.boolean().optional(),
+    encryptOutputAce: z.boolean().optional(),
+    redactLogs: z.boolean().optional(),
+    vaultDonSecrets: z
+      .array(
+        z.object({
+          key: z.string().min(1),
+          owner: z.string().optional(),
+          namespace: z.string().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .optional();
+
 const configSchema = z.object({
   url: z.string().optional(),
   evms: z
@@ -44,6 +62,7 @@ const configSchema = z.object({
     )
     .min(1),
   aceApiUrl: z.string().optional(),
+  privacy: privacyConfigSchema,
 });
 
 type Config = z.infer<typeof configSchema>;
@@ -251,6 +270,25 @@ type PostResponseWithBody = {
   body: string;
 };
 
+type SensitivityCategory = "CREDENTIAL" | "IDENTIFIER" | "FINANCIAL" | "PUBLIC_ONCHAIN";
+type ExternalPayloadTarget = "ACE_CONFIDENTIAL" | "ACE_HTTP" | "LAMBDA";
+
+type ResolvedPrivacyConfig = {
+  enableConfidentialAce: boolean;
+  encryptOutputAce: boolean;
+  redactLogs: boolean;
+  vaultDonSecrets: Array<{
+    key: string;
+    owner?: string;
+    namespace?: string;
+  }>;
+};
+
+type ConfidentialPostOptions = {
+  vaultDonSecrets: ResolvedPrivacyConfig["vaultDonSecrets"];
+  encryptOutput: boolean;
+};
+
 const ACTION_TYPE = {
   SYNC_KYC: 0,
   SYNC_EMPLOYMENT_STATUS: 1,
@@ -281,6 +319,65 @@ const ACE_SIGNER_SECRET_IDS = [
   "ACE_API_PRIVATE_KEY",
   "PRIVATE_KEY",
 ] as const;
+const DEFAULT_PRIVACY_CONFIG: ResolvedPrivacyConfig = {
+  enableConfidentialAce: true,
+  encryptOutputAce: true,
+  redactLogs: true,
+  vaultDonSecrets: [],
+};
+
+const SENSITIVITY_BY_FIELD: Record<string, SensitivityCategory> = {
+  action: "PUBLIC_ONCHAIN",
+  verified: "PUBLIC_ONCHAIN",
+  employed: "PUBLIC_ONCHAIN",
+  frozen: "PUBLIC_ONCHAIN",
+  achieved: "PUBLIC_ONCHAIN",
+  goalRequired: "PUBLIC_ONCHAIN",
+  authorized: "PUBLIC_ONCHAIN",
+  country: "PUBLIC_ONCHAIN",
+  timestamp: "PUBLIC_ONCHAIN",
+  startTime: "PUBLIC_ONCHAIN",
+  endTime: "PUBLIC_ONCHAIN",
+  roundId: "PUBLIC_ONCHAIN",
+  purchaseId: "PUBLIC_ONCHAIN",
+  goalId: "PUBLIC_ONCHAIN",
+  reason: "PUBLIC_ONCHAIN",
+  lockupUntil: "PUBLIC_ONCHAIN",
+  cliffEndTimestamp: "PUBLIC_ONCHAIN",
+  flags: "PUBLIC_ONCHAIN",
+  aceTransferRef: "PUBLIC_ONCHAIN",
+  account: "IDENTIFIER",
+  employeeAddress: "IDENTIFIER",
+  identityAddress: "IDENTIFIER",
+  walletAddress: "IDENTIFIER",
+  to: "IDENTIFIER",
+  investorAddress: "IDENTIFIER",
+  recipient: "IDENTIFIER",
+  sender: "IDENTIFIER",
+  buyer: "IDENTIFIER",
+  treasury: "IDENTIFIER",
+  token: "IDENTIFIER",
+  complianceAddress: "IDENTIFIER",
+  aceRecipientCommitment: "IDENTIFIER",
+  amount: "FINANCIAL",
+  usdcAmount: "FINANCIAL",
+  capUsdc: "FINANCIAL",
+  maxUsdc: "FINANCIAL",
+  tokenPriceUsdc6: "FINANCIAL",
+  auth: "CREDENTIAL",
+  ticket: "CREDENTIAL",
+};
+
+const BLOCKED_PLAINTEXT_HTTP_KEYS = new Set([
+  "auth",
+  "ticket",
+  "privateKey",
+  "private_key",
+  "secret",
+  "apiKey",
+  "api_key",
+  "authorization",
+]);
 
 const EIP712_TYPES = {
   "Generate Shielded Address": [
@@ -309,6 +406,96 @@ const safeJsonStringify = (obj: unknown): string =>
     (_, value) => (typeof value === "bigint" ? value.toString() : value),
     2,
   );
+
+const resolvePrivacyConfig = (runtime: Runtime<Config>): ResolvedPrivacyConfig => {
+  const privacy = runtime.config.privacy;
+  return {
+    enableConfidentialAce: privacy?.enableConfidentialAce ?? DEFAULT_PRIVACY_CONFIG.enableConfidentialAce,
+    encryptOutputAce: privacy?.encryptOutputAce ?? DEFAULT_PRIVACY_CONFIG.encryptOutputAce,
+    redactLogs: privacy?.redactLogs ?? DEFAULT_PRIVACY_CONFIG.redactLogs,
+    vaultDonSecrets: privacy?.vaultDonSecrets ?? DEFAULT_PRIVACY_CONFIG.vaultDonSecrets,
+  };
+};
+
+const sensitivityForField = (field: string): SensitivityCategory =>
+  SENSITIVITY_BY_FIELD[field] ?? "PUBLIC_ONCHAIN";
+
+const isAddressLike = (value: string): boolean => /^0x[a-fA-F0-9]{40}$/.test(value);
+
+const redactAddress = (value: string): string => `${value.slice(0, 6)}...${value.slice(-4)}`;
+
+const redactForLog = (value: unknown, fieldName?: string): unknown => {
+  if (fieldName) {
+    const category = sensitivityForField(fieldName);
+    if (category !== "PUBLIC_ONCHAIN") {
+      return `[REDACTED_${category}]`;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactForLog(entry, fieldName));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        key,
+        redactForLog(entry, key),
+      ]),
+    );
+  }
+
+  if (typeof value === "string" && isAddressLike(value)) {
+    return redactAddress(value);
+  }
+
+  return value;
+};
+
+const formatForLog = (runtime: Runtime<Config>, value: unknown): string => {
+  const privacy = resolvePrivacyConfig(runtime);
+  return privacy.redactLogs ? safeJsonStringify(redactForLog(value)) : safeJsonStringify(value);
+};
+
+const assertExternalPayloadPolicy = (
+  target: ExternalPayloadTarget,
+  payload: Record<string, unknown>,
+): void => {
+  const payloadKeys = Object.keys(payload);
+
+  if (target === "ACE_CONFIDENTIAL") {
+    return;
+  }
+
+  const blockedKeys = payloadKeys.filter((field) => BLOCKED_PLAINTEXT_HTTP_KEYS.has(field));
+  if (blockedKeys.length > 0) {
+    throw new Error(
+      `${target} payload includes blocked sensitive fields for plaintext HTTP transport: ${blockedKeys.join(", ")}`,
+    );
+  }
+
+  if (target === "ACE_HTTP") {
+    const sensitiveKeys = payloadKeys.filter((field) => sensitivityForField(field) !== "PUBLIC_ONCHAIN");
+    if (sensitiveKeys.length > 0) {
+      throw new Error(
+        `ACE payload includes sensitive fields that require confidential transport: ${sensitiveKeys.join(", ")}`,
+      );
+    }
+  }
+};
+
+const logHttpResult = (
+  runtime: Runtime<Config>,
+  label: string,
+  response: PostResponseWithBody,
+): void => {
+  const privacy = resolvePrivacyConfig(runtime);
+  if (privacy.redactLogs) {
+    runtime.log(`${label} status=${response.statusCode} body=<redacted>`);
+    return;
+  }
+  runtime.log(`${label} response: ${response.body}`);
+};
 
 const eventAbi = parseAbi([
   "event IdentityRegistered(address indexed userAddress, address indexed identity, uint16 country)",
@@ -413,6 +600,45 @@ const postDataWithBody = (
 
   if (!ok(resp)) {
     throw new Error(`HTTP request to ${url} failed with status ${resp.statusCode}: ${responseBody}`);
+  }
+
+  return { statusCode: resp.statusCode, body: responseBody };
+};
+
+const postConfidentialDataWithBody = (
+  sendRequester: ConfidentialHTTPSendRequester,
+  url: string,
+  payload: Record<string, unknown>,
+  options: ConfidentialPostOptions,
+): PostResponseWithBody => {
+  const req = {
+    vaultDonSecrets: options.vaultDonSecrets,
+    encryptOutput: options.encryptOutput,
+    request: {
+      url,
+      method: "POST",
+      bodyString: JSON.stringify(payload),
+      multiHeaders: {
+        "Content-Type": {
+          values: ["application/json"],
+        },
+      },
+    },
+  };
+
+  const resp = sendRequester.sendRequest(req).result();
+  const responseBody = (() => {
+    try {
+      return safeJsonStringify(jsonBody(resp));
+    } catch {
+      return textBody(resp);
+    }
+  })();
+
+  if (!ok(resp)) {
+    throw new Error(
+      `Confidential HTTP request to ${url} failed with status ${resp.statusCode}: ${responseBody}`,
+    );
   }
 
   return { statusCode: resp.statusCode, body: responseBody };
@@ -671,10 +897,41 @@ const executeAceAction = async (
   runtime: Runtime<Config>,
   input: AceSyncInput,
 ): Promise<string> => {
+  const privacy = resolvePrivacyConfig(runtime);
   const httpClient = new cre.capabilities.HTTPClient();
+  const confidentialHttpClient = new cre.capabilities.ConfidentialHTTPClient();
   const baseUrl = resolveAceApiBaseUrl(runtime);
   const domain = resolveAceDomain(runtime);
   const signer = resolveAceSignerAccount(runtime, input.account);
+
+  const sendAceRequest = (
+    path: "/shielded-address" | "/private-transfer" | "/withdraw",
+    payload: Record<string, unknown>,
+  ): PostResponseWithBody => {
+    const url = `${baseUrl}${path}`;
+
+    if (privacy.enableConfidentialAce) {
+      assertExternalPayloadPolicy("ACE_CONFIDENTIAL", payload);
+      return confidentialHttpClient
+        .sendRequest(runtime, postConfidentialDataWithBody, consensusIdenticalAggregation<PostResponseWithBody>())(
+          url,
+          payload,
+          {
+            encryptOutput: privacy.encryptOutputAce,
+            vaultDonSecrets: privacy.vaultDonSecrets,
+          },
+        )
+        .result();
+    }
+
+    assertExternalPayloadPolicy("ACE_HTTP", payload);
+    return httpClient
+      .sendRequest(runtime, postDataWithBody, consensusIdenticalAggregation<PostResponseWithBody>())(
+        url,
+        payload,
+      )
+      .result();
+  };
 
   if (input.action === "ACE_GENERATE_SHIELDED_ADDRESS") {
     const account = getAddress(input.account ?? signer.address);
@@ -691,14 +948,12 @@ const executeAceAction = async (
       },
       message,
     });
-    const response = httpClient
-      .sendRequest(runtime, postDataWithBody, consensusIdenticalAggregation<PostResponseWithBody>())(
-        `${baseUrl}/shielded-address`,
-        { account, timestamp: input.timestamp, auth },
-      )
-      .result();
-
-    runtime.log(`ACE /shielded-address response: ${response.body}`);
+    const response = sendAceRequest("/shielded-address", {
+      account,
+      timestamp: input.timestamp,
+      auth,
+    });
+    logHttpResult(runtime, "ACE /shielded-address", response);
     return `${input.action}:${response.statusCode}`;
   }
 
@@ -722,22 +977,16 @@ const executeAceAction = async (
       },
       message,
     });
-    const response = httpClient
-      .sendRequest(runtime, postDataWithBody, consensusIdenticalAggregation<PostResponseWithBody>())(
-        `${baseUrl}/private-transfer`,
-        {
-          account: sender,
-          recipient: message.recipient,
-          token: message.token,
-          amount: input.amount.toString(),
-          flags,
-          timestamp: input.timestamp,
-          auth,
-        },
-      )
-      .result();
-
-    runtime.log(`ACE /private-transfer response: ${response.body}`);
+    const response = sendAceRequest("/private-transfer", {
+      account: sender,
+      recipient: message.recipient,
+      token: message.token,
+      amount: input.amount.toString(),
+      flags,
+      timestamp: input.timestamp,
+      auth,
+    });
+    logHttpResult(runtime, "ACE /private-transfer", response);
     return `${input.action}:${response.statusCode}`;
   }
 
@@ -757,20 +1006,14 @@ const executeAceAction = async (
     },
     message,
   });
-  const response = httpClient
-    .sendRequest(runtime, postDataWithBody, consensusIdenticalAggregation<PostResponseWithBody>())(
-      `${baseUrl}/withdraw`,
-      {
-        account,
-        token: message.token,
-        amount: input.amount.toString(),
-        timestamp: input.timestamp,
-        auth,
-      },
-    )
-    .result();
-
-  runtime.log(`ACE /withdraw response: ${response.body}`);
+  const response = sendAceRequest("/withdraw", {
+    account,
+    token: message.token,
+    amount: input.amount.toString(),
+    timestamp: input.timestamp,
+    auth,
+  });
+  logHttpResult(runtime, "ACE /withdraw", response);
   return `${input.action}:${response.statusCode}`;
 };
 
@@ -913,7 +1156,7 @@ const onHTTPTrigger = async (
   }
 
   const rawPayload = Buffer.from(payload.input).toString("utf-8");
-  runtime.log(`HTTP payload received: ${rawPayload}`);
+  runtime.log(`HTTP payload received (bytes=${payload.input.length})`);
 
   let parsedPayload: unknown;
   try {
@@ -923,7 +1166,7 @@ const onHTTPTrigger = async (
   }
 
   const syncInput = syncInputSchema.parse(parsedPayload);
-  runtime.log(`Parsed sync action: ${safeJsonStringify(syncInput)}`);
+  runtime.log(`Parsed sync action: ${formatForLog(runtime, syncInput)}`);
 
   if (isAceSyncInput(syncInput)) {
     return executeAceAction(runtime, syncInput);
@@ -944,6 +1187,9 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
   if (!lambdaPayload) {
     return "Ignored event";
   }
+
+  assertExternalPayloadPolicy("LAMBDA", lambdaPayload);
+  runtime.log(`Forwarding event payload to Lambda: ${formatForLog(runtime, lambdaPayload)}`);
 
   // Try secrets vault first (production), fall back to config url (simulation)
   let lambdaUrl: string;
