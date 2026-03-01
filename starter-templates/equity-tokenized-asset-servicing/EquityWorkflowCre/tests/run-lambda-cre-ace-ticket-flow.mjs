@@ -351,9 +351,9 @@ const run = async () => {
     DEFAULT_ACE_API_URL;
   const aceChainId = Number(
     process.env.ACE_CHAIN_ID ||
-      envFromFile.ACE_CHAIN_ID ||
-      evmConfig.aceChainId ||
-      DEFAULT_ACE_CHAIN_ID,
+    envFromFile.ACE_CHAIN_ID ||
+    evmConfig.aceChainId ||
+    DEFAULT_ACE_CHAIN_ID,
   );
 
   const identityRegistryAddress = evmConfig.identityRegistryAddress;
@@ -391,8 +391,8 @@ const run = async () => {
     "true";
   const cliffLeadSeconds = Number(
     process.env.ACE_SIMULATED_CLIFF_LEAD_SECONDS ??
-      envFromFile.ACE_SIMULATED_CLIFF_LEAD_SECONDS ??
-      "600",
+    envFromFile.ACE_SIMULATED_CLIFF_LEAD_SECONDS ??
+    "600",
   );
   const vestingGoalId = (
     process.env.ACE_VESTING_GOAL_ID ??
@@ -413,8 +413,8 @@ const run = async () => {
   const useDirectReceiverReports =
     String(
       process.env.USE_DIRECT_RECEIVER_REPORTS ??
-        envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
-        "false",
+      envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
+      "false",
     ).toLowerCase() === "true";
   const logCreOutput =
     String(process.env.LOG_CRE_OUTPUT ?? envFromFile.LOG_CRE_OUTPUT ?? "true").toLowerCase() === "true";
@@ -459,7 +459,7 @@ const run = async () => {
 
     let lastOutput = "";
     for (let attempt = 1; attempt <= 4; attempt++) {
-      const out = spawnSync("cre", args, { cwd: projectRoot, encoding: "utf-8", env: childEnv });
+      const out = spawnSync("cre", args, { cwd: projectRoot, encoding: "utf-8", env: childEnv, shell: true });
       const merged = `${out.stdout || ""}\n${out.stderr || ""}`;
       lastOutput = merged;
       if (logCreOutput) {

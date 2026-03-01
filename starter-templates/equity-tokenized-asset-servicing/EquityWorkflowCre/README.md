@@ -180,13 +180,19 @@ node -e "const {spawnSync}=require('child_process'); const p=JSON.stringify({act
 
 ## Test Commands
 
-From repo root:
+Make sure you are inside the `EquityWorkflowCre` directory first:
 
 ```bash
-npm --prefix EquityWorkflowCre run test:sync-write
-npm --prefix EquityWorkflowCre run test:lambda-sync
-npm --prefix EquityWorkflowCre run test:lambda-cre-ace-ticket
-npm --prefix EquityWorkflowCre run test:private-rounds-market
+cd EquityWorkflowCre
+```
+
+Then you can run the tests:
+
+```bash
+npm run test:sync-write
+npm run test:lambda-sync
+npm run test:lambda-cre-ace-ticket
+npm run test:private-rounds-market
 ```
 
 Main E2E scripts:
