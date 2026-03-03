@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RWA Tokenization Workflow - Chainlink CRE & ACE</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #F8FAFC;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        .container {
+            position: relative;
+            width: 1200px;
+            height: 800px;
+            background: #FFFFFF;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            border: 1px solid #E2E8F0;
+            overflow: hidden;
+        }
+
+        /* Base Styles */
+        .box {
+            position: absolute;
+            background: #FFFFFF;
+            border: 2px solid #2D3236;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: #2D3236;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+        }
+
+        .label {
+            font-size: 14px;
+        }
+
+        .circle {
+            position: absolute;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: #FFFFFF;
+            z-index: 15;
+            box-shadow: 0 0 20px rgba(42, 90, 218, 0.4);
+        }
+
+        /* Elements */
+        #lambda {
+            top: 50px;
+            left: 50px;
+            width: 160px;
+            height: 80px;
+            border-color: #2D3236;
+        }
+
+        #cre {
+            top: 50px;
+            left: 450px;
+            width: 120px;
+            height: 120px;
+            background: #2A5ADA;
+            border: 3px solid #1E40AF;
+        }
+
+        #blockchain {
+            bottom: 50px;
+            left: 50px;
+            width: 1100px;
+            height: 60px;
+            background: #2D3236;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 4px;
+        }
+
+        #ace-vault {
+            top: 250px;
+            left: 300px;
+            width: 420px;
+            height: 120px;
+            background: rgba(45, 50, 54, 0.05);
+            border: 2px dashed #94A3B8;
+            backdrop-filter: blur(4px);
+            opacity: 0;
+        }
+
+        #employee-wallet {
+            top: 450px;
+            left: 100px;
+            width: 100px;
+            height: 160px;
+            border-radius: 12px;
+            opacity: 0;
+        }
+
+        #treasury {
+            top: 450px;
+            left: 350px;
+            width: 140px;
+            height: 80px;
+            background: #F1F5F9;
+            opacity: 0;
+        }
+
+        #private-market {
+            top: 250px;
+            right: 50px;
+            width: 400px;
+            height: 400px;
+            background: #F8FAFC;
+            border: 2px solid #CBD5E1;
+            opacity: 0;
+        }
+
+        #compliance-shield {
+            top: 420px;
+            right: 430px;
+            /* At the entrance of market */
+            width: 40px;
+            height: 100px;
+            background: #2D3236;
+            border-radius: 20px;
+            opacity: 0;
+            z-index: 20;
+        }
+
+        #unknown-user,
+        #verified-user {
+            top: 410px;
+            left: 550px;
+            width: 100px;
+            height: 120px;
+            opacity: 0;
+        }
+
+        #unknown-user {
+            border-color: #94A3B8;
+            color: #94A3B8;
+        }
+
+        #verified-user {
+            border-color: #10B981;
+            color: #10B981;
+        }
+
+        /* Small dynamic elements */
+        .data-pulse {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #2A5ADA;
+            border-radius: 50%;
+            opacity: 0;
+            z-index: 5;
+        }
+
+        .beam {
+            position: absolute;
+            background: #2A5ADA;
+            transform-origin: top left;
+            opacity: 0;
+            z-index: 4;
+        }
+
+        .badge {
+            position: absolute;
+            background: #10B981;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            font-family: monospace;
+            opacity: 0;
+            z-index: 20;
+            white-space: nowrap;
+        }
+
+        .ticket {
+            position: absolute;
+            width: 30px;
+            height: 20px;
+            background: #F59E0B;
+            border-radius: 2px;
+            opacity: 0;
+            z-index: 25;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+        }
+
+        .coin {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #94A3B8;
+            border-radius: 50%;
+            opacity: 0;
+            z-index: 25;
+            border: 2px solid #64748B;
+        }
+
+        .equity-token {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: #F59E0B;
+            border-radius: 50%;
+            opacity: 0;
+            z-index: 25;
+            border: 2px solid #D97706;
+        }
+
+        .redvert {
+            position: absolute;
+            color: #EF4444;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 14px;
+            opacity: 0;
+            z-index: 30;
+            text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+        }
+
+        .svg-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        path {
+            fill: none;
+            stroke-width: 2;
+            opacity: 0;
+        }
+
+        /* ---------------- ANIMATIONS ---------------- */
+
+        /* Phase 1: Lambda -> CRE -> Blockchain */
+        @keyframes pulseLambdaToCre {
+            0% {
+                transform: translate(210px, 90px);
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            90% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: translate(450px, 90px);
+                opacity: 0;
+            }
+        }
+
+        @keyframes syncBeamVertical {
+            0% {
+                opacity: 0;
+                transform: scaleY(0);
+            }
+
+            20% {
+                opacity: 1;
+                transform: scaleY(1);
+            }
+
+            80% {
+                opacity: 1;
+                transform: scaleY(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: scaleY(1);
+            }
+        }
+
+        @keyframes syncBeamHorizontal {
+            0% {
+                opacity: 0;
+                transform: scaleX(0) rotate(25deg);
+            }
+
+            20% {
+                opacity: 1;
+                transform: scaleX(1) rotate(25deg);
+            }
+
+            80% {
+                opacity: 1;
+                transform: scaleX(1) rotate(25deg);
+            }
+
+            100% {
+                opacity: 0;
+                transform: scaleX(1) rotate(25deg);
+            }
+        }
+
+        @keyframes badgePop {
+            0% {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            10% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            90% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+        }
+
+        /* Phase 2: ACE Vault */
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+        }
+
+        @keyframes dashedLineFlow {
+            0% {
+                stroke-dashoffset: 40;
+                opacity: 1;
+            }
+
+            100% {
+                stroke-dashoffset: 0;
+                opacity: 1;
+            }
+        }
+
+        @keyframes ticketPath {
+            0% {
+                opacity: 0;
+                transform: translate(510px, 300px) scale(0.5);
+            }
+
+            10% {
+                opacity: 1;
+                transform: translate(510px, 300px) scale(1);
+            }
+
+            40% {
+                opacity: 1;
+                transform: translate(150px, 300px) scale(1);
+            }
+
+            50% {
+                opacity: 1;
+                transform: translate(150px, 450px) scale(1);
+            }
+
+            70% {
+                opacity: 1;
+                transform: translate(150px, 450px) scale(1);
+            }
+
+            /* Pause in wallet */
+            90% {
+                opacity: 1;
+                transform: translate(150px, 690px) scale(1);
+            }
+
+            /* Down to blockchain */
+            100% {
+                opacity: 0;
+                transform: translate(150px, 690px) scale(1.5);
+            }
+
+            /* Flash */
+        }
+
+        @keyframes equityFromTreasury {
+            0% {
+                opacity: 0;
+                transform: translate(400px, 490px);
+            }
+
+            20% {
+                opacity: 1;
+                transform: translate(400px, 490px);
+            }
+
+            80% {
+                opacity: 1;
+                transform: translate(150px, 490px);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(150px, 490px);
+            }
+        }
+
+        @keyframes flashGreen {
+            0% {
+                background: #2D3236;
+            }
+
+            5% {
+                background: #10B981;
+            }
+
+            20% {
+                background: #2D3236;
+            }
+
+            100% {
+                background: #2D3236;
+            }
+        }
+
+        /* Phase 3 & 4: Market Setup & Unauthorized */
+        @keyframes drawMarket {
+            0% {
+                opacity: 0;
+                height: 0;
+            }
+
+            100% {
+                opacity: 1;
+                height: 400px;
+            }
+        }
+
+        @keyframes shieldColorRed {
+            0% {
+                background: #2D3236;
+            }
+
+            50% {
+                background: #EF4444;
+                box-shadow: 0 0 20px #EF4444;
+            }
+
+            100% {
+                background: #2D3236;
+            }
+        }
+
+        @keyframes unauthorizedCoin {
+            0% {
+                opacity: 0;
+                transform: translate(600px, 450px);
+            }
+
+            20% {
+                opacity: 1;
+                transform: translate(600px, 450px);
+            }
+
+            60% {
+                opacity: 1;
+                transform: translate(750px, 450px);
+            }
+
+            /* Hits shield at 770 */
+            90% {
+                opacity: 1;
+                transform: translate(730px, 470px);
+            }
+
+            /* Bounces back */
+            100% {
+                opacity: 0;
+                transform: translate(730px, 470px);
+            }
+        }
+
+        /* Phase 5: Verified & Settlement */
+        @keyframes authorizedCoin {
+            0% {
+                opacity: 0;
+                transform: translate(600px, 450px);
+            }
+
+            10% {
+                opacity: 1;
+                transform: translate(600px, 450px);
+            }
+
+            90% {
+                opacity: 1;
+                transform: translate(950px, 450px);
+            }
+
+            /* Inside market */
+            100% {
+                opacity: 0;
+                transform: translate(950px, 450px);
+            }
+        }
+
+        @keyframes shieldColorGreen {
+            0% {
+                background: #2D3236;
+            }
+
+            20% {
+                background: #10B981;
+            }
+
+            80% {
+                background: #10B981;
+            }
+
+            100% {
+                background: #2D3236;
+            }
+        }
+
+        @keyframes equityToInvestor {
+            0% {
+                opacity: 0;
+                transform: translate(950px, 480px);
+            }
+
+            10% {
+                opacity: 1;
+                transform: translate(950px, 480px);
+            }
+
+            90% {
+                opacity: 1;
+                transform: translate(600px, 480px);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(600px, 480px);
+            }
+        }
+
+        @keyframes coinToTreasury {
+            0% {
+                opacity: 0;
+                transform: translate(950px, 450px);
+            }
+
+            10% {
+                opacity: 1;
+                transform: translate(950px, 450px);
+            }
+
+            90% {
+                opacity: 1;
+                transform: translate(420px, 450px);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(420px, 450px);
+            }
+        }
+
+        /* ---------------- SCHEDULING (Timing config) ---------------- */
+
+        /* Total cycle ~ 24s */
+        .sync-pulse {
+            animation: pulseLambdaToCre 1s linear infinite;
+        }
+
+        #beam1 {
+            animation: syncBeamVertical 2s ease-in-out 1s forwards;
+            left: 510px;
+            top: 170px;
+            width: 4px;
+            height: 520px;
+            transform-origin: top center;
+            transform: scaleY(0);
+        }
+
+        #badge1 {
+            animation: badgePop 2s ease-in-out 1.2s forwards;
+            left: 490px;
+            top: 660px;
+        }
+
+        #beam2 {
+            animation: syncBeamVertical 2s ease-in-out 1.5s forwards;
+            left: 510px;
+            top: 170px;
+            width: 4px;
+            height: 520px;
+            transform-origin: top center;
+            transform: scaleY(0);
+        }
+
+        #badge2 {
+            animation: badgePop 2s ease-in-out 1.7s forwards;
+            left: 580px;
+            top: 660px;
+        }
+
+        #beam3 {
+            animation: syncBeamVertical 2s ease-in-out 2s forwards;
+            left: 510px;
+            top: 170px;
+            width: 4px;
+            height: 520px;
+            transform-origin: top center;
+            transform: scaleY(0);
+        }
+
+        #badge3 {
+            animation: badgePop 2s ease-in-out 2.2s forwards;
+            left: 770px;
+            top: 660px;
+        }
+
+        /* Phase 2: ACE */
+        #ace-vault {
+            animation: fadeIn 1s ease 3s forwards, fadeOut 1s ease 10s forwards;
+        }
+
+        #employee-wallet {
+            animation: fadeIn 1s ease 3s forwards, fadeOut 1s ease 10s forwards;
+        }
+
+        #treasury {
+            animation: fadeIn 1s ease 3s forwards;
+        }
+
+        #cre-to-ace {
+            animation: dashedLineFlow 1s linear infinite;
+            stroke: #2A5ADA;
+            stroke-dasharray: 8;
+            opacity: 0;
+            animation-delay: 3.5s;
+            animation-fill-mode: forwards;
+        }
+
+        /* Ticket Flow: 4.5s -> 8.5s */
+        #the-ticket {
+            animation: ticketPath 4s cubic-bezier(0.4, 0, 0.2, 1) 4.5s forwards;
+        }
+
+        #blockchain {
+            animation: flashGreen 1s ease 7.4s;
+        }
+
+        #equity-1 {
+            animation: equityFromTreasury 1s ease 7.6s forwards;
+        }
+
+        /* Phase 3 & 4: Market setup & Unauthorized */
+        #private-market {
+            animation: drawMarket 1s ease 10.5s forwards;
+        }
+
+        #compliance-shield {
+            animation: fadeIn 1s ease 11s forwards;
+        }
+
+        #market-beam1 {
+            animation: syncBeamHorizontal 1.5s ease 11.5s forwards;
+            left: 565px;
+            top: 160px;
+            width: 250px;
+            height: 4px;
+            transform-origin: left center;
+            transform: scaleX(0) rotate(25deg);
+        }
+
+        #market-badge1 {
+            animation: badgePop 2s ease 12s forwards;
+            right: 100px;
+            top: 280px;
+        }
+
+        #unknown-user {
+            animation: fadeIn 0.5s ease 13s forwards, fadeOut 0.5s ease 16s forwards;
+        }
+
+        #bad-coin {
+            animation: unauthorizedCoin 2s ease 13.5s forwards;
+        }
+
+        #compliance-shield {
+            animation: shieldColorRed 1s ease 14.7s;
+        }
+
+        #revert-text {
+            animation: badgePop 2s ease 14.7s forwards;
+            right: 420px;
+            top: 380px;
+        }
+
+        /* Phase 5: Verified & Settlement */
+        #verified-user {
+            animation: fadeIn 0.5s ease 16.5s forwards;
+        }
+
+        #good-coin1 {
+            animation: authorizedCoin 2s linear 17.5s forwards;
+        }
+
+        #good-coin2 {
+            animation: authorizedCoin 2s linear 18.0s forwards;
+        }
+
+        #good-coin3 {
+            animation: authorizedCoin 2s linear 18.5s forwards;
+        }
+
+        /* Shield allows them */
+        .color-green-shield {
+            animation: shieldColorGreen 3s ease 17.5s forwards !important;
+        }
+
+        /* CRE detects and settles */
+        #settle-beam {
+            animation: syncBeamHorizontal 2s ease 20.5s forwards;
+            left: 565px;
+            top: 160px;
+            width: 250px;
+            height: 4px;
+            transform-origin: left center;
+            transform: scaleX(0) rotate(25deg);
+        }
+
+        #settle-badge {
+            animation: badgePop 3s ease 21s forwards;
+            right: 200px;
+            top: 350px;
+        }
+
+        /* Coins move to treasury, Equity back to investor */
+        #settled-coin1 {
+            animation: coinToTreasury 1s ease 21.5s forwards;
+        }
+
+        #settled-coin2 {
+            animation: coinToTreasury 1s ease 21.7s forwards;
+        }
+
+        #settled-coin3 {
+            animation: coinToTreasury 1s ease 21.9s forwards;
+        }
+
+        #settled-equity1 {
+            animation: equityToInvestor 1s ease 21.5s forwards;
+        }
+
+        #settled-equity2 {
+            animation: equityToInvestor 1s ease 21.7s forwards;
+        }
+
+        #settled-equity3 {
+            animation: equityToInvestor 1s ease 21.9s forwards;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <!-- SVG Lines for curved connections -->
+        <svg class="svg-lines" viewBox="0 0 1200 800">
+            <!-- CRE to ACE dashed line -->
+            <path id="cre-to-ace" d="M 510 170 C 510 200, 510 230, 510 250" />
+        </svg>
+
+        <!-- Base Elements -->
+        <div id="lambda" class="box">
+            <div class="label">AWS Lambda<br>(Company State)</div>
+        </div>
+
+        <div id="cre" class="circle">
+            <div class="label" style="text-align: center;">Chainlink<br>CRE</div>
+        </div>
+
+        <!-- Data pulses Lambda to CRE -->
+        <div class="data-pulse sync-pulse"></div>
+        <div class="data-pulse sync-pulse" style="animation-delay: 0.33s;"></div>
+        <div class="data-pulse sync-pulse" style="animation-delay: 0.66s;"></div>
+
+        <!-- Beams & Badges for Phase 1 -->
+        <div id="beam1" class="beam"></div>
+        <div id="badge1" class="badge">SYNC_KYC</div>
+
+        <div id="beam2" class="beam"></div>
+        <div id="badge2" class="badge">SYNC_EMPLOYMENT_STATUS</div>
+
+        <div id="beam3" class="beam"></div>
+        <div id="badge3" class="badge">SYNC_SET_TOKEN_COMPLIANCE</div>
+
+        <!-- Phase 2: Privacy Shielding -->
+        <div id="ace-vault" class="box">
+            <div class="label" style="opacity: 0.5;">ACE Privacy Vault</div>
+        </div>
+
+        <div id="employee-wallet" class="box">
+            <div class="label" style="font-size: 12px;">Employee<br>Wallet</div>
+        </div>
+
+        <div id="treasury" class="box">
+            <div class="label">Treasury</div>
+        </div>
+
+        <div id="the-ticket" class="ticket"></div>
+        <div id="equity-1" class="equity-token"></div>
+
+        <!-- Phase 3, 4, 5: Market Zone -->
+        <div id="private-market" class="box">
+            <div class="label" style="position: absolute; top: 10px; left: 10px; color: #94A3B8;">Private Rounds Market
+            </div>
+        </div>
+
+        <div id="compliance-shield" class="box" style="animation: none;">
+            <!-- Using JS/classes for multiple anims if needed, or inline -->
+        </div>
+
+        <script>
+            // Trigger the shield color change for the good coins dynamically via class at 17.5s
+            setTimeout(() => {
+                document.getElementById('compliance-shield').classList.add('color-green-shield');
+            }, 17500);
+        </script>
+
+        <div id="market-beam1" class="beam"></div>
+        <div id="market-badge1" class="badge">SYNC_CREATE_ROUND & ALLOWLIST</div>
+
+        <!-- The actors -->
+        <div id="unknown-user" class="box">
+            <div class="label">Unknown<br>User</div>
+        </div>
+
+        <div id="verified-user" class="box">
+            <div class="label">Verified<br>Investor<br>✔</div>
+        </div>
+
+        <!-- The coins during rejection -->
+        <div id="bad-coin" class="coin"></div>
+        <div id="revert-text" class="redvert">REVERT: Unauthorized</div>
+
+        <!-- The coins during success -->
+        <div id="good-coin1" class="coin"></div>
+        <div id="good-coin2" class="coin"></div>
+        <div id="good-coin3" class="coin"></div>
+
+        <div id="settle-beam" class="beam"></div>
+        <div id="settle-badge" class="badge" style="background: #2A5ADA;">SYNC_MARK_PURCHASE_SETTLED</div>
+
+        <div id="settled-coin1" class="coin"></div>
+        <div id="settled-coin2" class="coin"></div>
+        <div id="settled-coin3" class="coin"></div>
+
+        <div id="settled-equity1" class="equity-token"></div>
+        <div id="settled-equity2" class="equity-token"></div>
+        <div id="settled-equity3" class="equity-token"></div>
+
+        <!-- The Blockchain Base at the bottom -->
+        <div id="blockchain" class="box">
+            <div class="label" style="font-size: 18px; letter-spacing: 2px;">EVM Blockchain Base</div>
+        </div>
+
+    </div>
+
+</body>
+
+</html>

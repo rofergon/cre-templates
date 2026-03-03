@@ -1,0 +1,212 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1840 2900" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b1024"/>
+      <stop offset="100%" stop-color="#151d3f"/>
+    </linearGradient>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3056d8"/>
+      <stop offset="100%" stop-color="#1e40af"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#7dd3fc"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1840" height="2900" fill="url(#bg)"/>
+
+  <rect x="30" y="24" width="1780" height="110" rx="14" fill="url(#header)" filter="url(#shadow)"/>
+  <text x="920" y="66" text-anchor="middle" fill="#ffffff" font-size="30" font-weight="700">
+    Lambda + CRE + ACE Ticket Flow (with explicit Solidity contract interactions)
+  </text>
+  <text x="920" y="100" text-anchor="middle" fill="#bfdbfe" font-size="15">
+    Source analysis: EquityWorkflowCre/main.ts + run-lambda-cre-ace-ticket-flow.mjs + ComplianceV2.sol + IdentityRegistry.sol + EquityWorkflowReceiver.sol + PrivateEmployeeEquity.sol
+  </text>
+
+  <!-- Lanes -->
+  <g>
+    <rect x="40" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="220" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="400" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="580" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="760" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="940" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="1120" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="1300" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="1480" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+    <rect x="1660" y="170" width="160" height="2380" rx="10" fill="#111a3a" stroke="#334155"/>
+
+    <text x="120" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">Admin / Test</text>
+    <text x="120" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">run-lambda-cre-ace-ticket-flow.mjs</text>
+
+    <text x="300" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">Employee Wallet</text>
+    <text x="300" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">EOA signer</text>
+
+    <text x="480" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">Lambda API</text>
+    <text x="480" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">company employee state</text>
+
+    <text x="660" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">CRE Workflow</text>
+    <text x="660" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">EquityWorkflowCre/main.ts</text>
+
+    <text x="840" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">EquityWorkflowReceiver.sol</text>
+    <text x="840" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">onReport router</text>
+
+    <text x="1020" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">IdentityRegistry.sol</text>
+    <text x="1020" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">KYC identity + country</text>
+
+    <text x="1200" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">ComplianceV2.sol</text>
+    <text x="1200" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">transfer policy</text>
+
+    <text x="1380" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">PrivateEmployeeEquity.sol</text>
+    <text x="1380" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">employment/goal/cliff</text>
+
+    <text x="1560" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">Token (ERC3643)</text>
+    <text x="1560" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">setAddressFrozen/setCompliance</text>
+
+    <text x="1740" y="206" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">ACE API + Vault</text>
+    <text x="1740" y="226" text-anchor="middle" fill="#94a3b8" font-size="11">private ledger + withdrawWithTicket</text>
+  </g>
+
+  <!-- Step backgrounds -->
+  <rect x="30" y="270" width="1780" height="170" rx="12" fill="#0f172a" stroke="#f59e0b"/>
+  <rect x="30" y="460" width="1780" height="420" rx="12" fill="#0f172a" stroke="#3b82f6"/>
+  <rect x="30" y="900" width="1780" height="360" rx="12" fill="#0f172a" stroke="#a855f7"/>
+  <rect x="30" y="1280" width="1780" height="320" rx="12" fill="#0f172a" stroke="#14b8a6"/>
+  <rect x="30" y="1620" width="1780" height="300" rx="12" fill="#0f172a" stroke="#22c55e"/>
+  <rect x="30" y="1940" width="1780" height="300" rx="12" fill="#0f172a" stroke="#ef4444"/>
+  <rect x="30" y="2260" width="1780" height="290" rx="12" fill="#0f172a" stroke="#60a5fa"/>
+
+  <!-- Step titles -->
+  <text x="60" y="304" fill="#f59e0b" font-size="20" font-weight="700">Step 1. Persist employee state in Lambda</text>
+  <text x="60" y="494" fill="#60a5fa" font-size="20" font-weight="700">Step 2. CRE submits on-chain sync actions through EquityWorkflowReceiver.sol</text>
+  <text x="60" y="934" fill="#c084fc" font-size="20" font-weight="700">Step 3. Eligibility simulation path (PrivateEmployeeEquity + wallet freeze sync)</text>
+  <text x="60" y="1314" fill="#2dd4bf" font-size="20" font-weight="700">Step 4. Optional admin top-up into ACE Vault (public token to private balance)</text>
+  <text x="60" y="1654" fill="#4ade80" font-size="20" font-weight="700">Step 5. ACE private transfer and withdraw ticket generation</text>
+  <text x="60" y="1974" fill="#f87171" font-size="20" font-weight="700">Step 6. Employee redeems ticket on-chain</text>
+  <text x="60" y="2294" fill="#93c5fd" font-size="20" font-weight="700">Step 7. Contract interaction matrix extracted from Solidity</text>
+
+  <!-- Step 1 -->
+  <line x1="120" y1="340" x2="480" y2="340" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="300" y="328" text-anchor="middle" fill="#e2e8f0" font-size="12">POST /lambda action=CompanyEmployeeInput</text>
+  <text x="300" y="347" text-anchor="middle" fill="#94a3b8" font-size="11">employeeAddress, identityAddress, country, kycVerified, employed, walletFrozen</text>
+
+  <line x1="480" y1="385" x2="660" y2="385" stroke="#7dd3fc" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+  <text x="570" y="375" text-anchor="middle" fill="#94a3b8" font-size="11">state consumed by CRE logic</text>
+
+  <!-- Step 2 -->
+  <line x1="120" y1="540" x2="660" y2="540" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="390" y="528" text-anchor="middle" fill="#e2e8f0" font-size="12">SYNC_KYC payload</text>
+
+  <line x1="660" y1="570" x2="840" y2="570" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="750" y="558" text-anchor="middle" fill="#e2e8f0" font-size="12">submitInstruction -&gt; onReport(actionType=0)</text>
+
+  <line x1="840" y1="600" x2="1020" y2="600" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="930" y="588" text-anchor="middle" fill="#e2e8f0" font-size="12">_processKycPayload()</text>
+  <text x="930" y="607" text-anchor="middle" fill="#94a3b8" font-size="11">registerIdentity() / setCountry() / deleteIdentity()</text>
+
+  <line x1="120" y1="660" x2="660" y2="660" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="390" y="648" text-anchor="middle" fill="#e2e8f0" font-size="12">SYNC_FREEZE_WALLET payload</text>
+
+  <line x1="660" y1="690" x2="840" y2="690" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="840" y1="720" x2="1560" y2="720" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1200" y="708" text-anchor="middle" fill="#e2e8f0" font-size="12">_processFreezeWalletPayload() -&gt; Token.setAddressFrozen(wallet, frozen)</text>
+
+  <line x1="120" y1="780" x2="660" y2="780" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="390" y="768" text-anchor="middle" fill="#e2e8f0" font-size="12">SYNC_SET_TOKEN_COMPLIANCE and SYNC_SET_INVESTOR_AUTH</text>
+
+  <line x1="660" y1="810" x2="840" y2="810" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="840" y1="830" x2="1560" y2="830" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1200" y="818" text-anchor="middle" fill="#e2e8f0" font-size="12">_processSetTokenCompliancePayload() -&gt; Token.setCompliance(complianceV2)</text>
+
+  <line x1="840" y1="860" x2="1200" y2="860" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1020" y="848" text-anchor="middle" fill="#e2e8f0" font-size="12">_processSetInvestorAuthPayload() -&gt; ComplianceV2.setInvestorAuthorization()</text>
+
+  <!-- Step 3 -->
+  <line x1="120" y1="980" x2="660" y2="980" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="390" y="968" text-anchor="middle" fill="#e2e8f0" font-size="12">SYNC_SET_CLAIM_REQUIREMENTS</text>
+
+  <line x1="660" y1="1010" x2="840" y2="1010" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="840" y1="1040" x2="1380" y2="1040" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1110" y="1028" text-anchor="middle" fill="#e2e8f0" font-size="12">PrivateEmployeeEquity.setClaimRequirements(employee, cliffEnd, goalId, goalRequired)</text>
+
+  <line x1="120" y1="1090" x2="660" y2="1090" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="390" y="1078" text-anchor="middle" fill="#e2e8f0" font-size="12">SYNC_EMPLOYMENT_STATUS</text>
+
+  <line x1="660" y1="1120" x2="840" y2="1120" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="840" y1="1150" x2="1380" y2="1150" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1110" y="1138" text-anchor="middle" fill="#e2e8f0" font-size="12">PrivateEmployeeEquity.updateEmploymentStatus(employee, employed)</text>
+
+  <line x1="120" y1="1185" x2="660" y2="1185" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="390" y="1173" text-anchor="middle" fill="#e2e8f0" font-size="12">SYNC_GOAL(false/true)</text>
+
+  <line x1="660" y1="1215" x2="840" y2="1215" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="840" y1="1240" x2="1380" y2="1240" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1110" y="1228" text-anchor="middle" fill="#e2e8f0" font-size="12">PrivateEmployeeEquity.setGoalAchieved(goalId, achieved)</text>
+
+  <line x1="840" y1="1195" x2="1380" y2="1195" stroke="#7dd3fc" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+  <line x1="840" y1="1260" x2="1560" y2="1260" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1200" y="1248" text-anchor="middle" fill="#94a3b8" font-size="11">_syncWalletFreezeFromEligibility(): isEmployeeEligible() then Token.setAddressFrozen(employee, !eligible)</text>
+
+  <!-- Step 4 -->
+  <line x1="120" y1="1360" x2="1560" y2="1360" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="840" y="1348" text-anchor="middle" fill="#e2e8f0" font-size="12">Token.approve(vault, amount)</text>
+
+  <line x1="120" y1="1410" x2="1740" y2="1410" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="930" y="1398" text-anchor="middle" fill="#e2e8f0" font-size="12">ACE Vault.deposit(token, amount)</text>
+
+  <line x1="1740" y1="1450" x2="1560" y2="1450" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1650" y="1438" text-anchor="middle" fill="#e2e8f0" font-size="12">vault triggers token movement</text>
+
+  <line x1="1560" y1="1490" x2="1200" y2="1490" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1380" y="1478" text-anchor="middle" fill="#e2e8f0" font-size="12">Token transfer path checks ComplianceV2.canTransfer(from, vault, amount)</text>
+
+  <line x1="1200" y1="1530" x2="1020" y2="1530" stroke="#7dd3fc" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+  <text x="1110" y="1518" text-anchor="middle" fill="#94a3b8" font-size="11">ComplianceV2.canTransfer() calls IdentityRegistry.isVerified()</text>
+
+  <!-- Step 5 -->
+  <line x1="120" y1="1710" x2="1740" y2="1710" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="930" y="1698" text-anchor="middle" fill="#e2e8f0" font-size="12">POST /private-transfer (EIP-712 signed: sender, recipient, token, amount, timestamp)</text>
+
+  <line x1="1740" y1="1750" x2="300" y2="1750" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1020" y="1738" text-anchor="middle" fill="#e2e8f0" font-size="12">ACE off-chain private ledger credits employee private balance</text>
+
+  <line x1="300" y1="1800" x2="1740" y2="1800" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1020" y="1788" text-anchor="middle" fill="#e2e8f0" font-size="12">POST /withdraw (EIP-712 signed) -&gt; returns ticket + deadline</text>
+
+  <text x="60" y="1860" fill="#94a3b8" font-size="12">In main.ts this path is ACE action handling; in the test script it is called directly against ACE API.</text>
+
+  <!-- Step 6 -->
+  <line x1="300" y1="2020" x2="1740" y2="2020" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="1020" y="2008" text-anchor="middle" fill="#e2e8f0" font-size="12">Employee sends on-chain tx: ACE Vault.withdrawWithTicket(token, amount, ticket)</text>
+
+  <line x1="1740" y1="2060" x2="1560" y2="2060" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1650" y="2048" text-anchor="middle" fill="#e2e8f0" font-size="12">ticket verified, token release path</text>
+
+  <line x1="1560" y1="2100" x2="1200" y2="2100" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1380" y="2088" text-anchor="middle" fill="#e2e8f0" font-size="12">Token transfer checks ComplianceV2.canTransfer(vault, employee, amount)</text>
+
+  <line x1="1200" y1="2140" x2="1020" y2="2140" stroke="#7dd3fc" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+  <text x="1110" y="2128" text-anchor="middle" fill="#94a3b8" font-size="11">canTransfer() reuses IdentityRegistry.isVerified()</text>
+
+  <line x1="1560" y1="2180" x2="300" y2="2180" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="930" y="2168" text-anchor="middle" fill="#e2e8f0" font-size="12">employee public Token.balanceOf increases (final success check in test)</text>
+
+  <!-- Step 7 Matrix -->
+  <rect x="60" y="2330" width="1720" height="200" rx="10" fill="#111a3a" stroke="#334155"/>
+  <text x="90" y="2360" fill="#e2e8f0" font-size="14" font-weight="700">Direct protocol interactions (who calls what)</text>
+
+  <text x="90" y="2390" fill="#cbd5e1" font-size="12">1) EquityWorkflowReceiver.sol -&gt; IdentityRegistry.sol: registerIdentity(), setCountry(), deleteIdentity()</text>
+  <text x="90" y="2416" fill="#cbd5e1" font-size="12">2) EquityWorkflowReceiver.sol -&gt; ComplianceV2.sol: setInvestorAuthorization(), setInvestorLockup()</text>
+  <text x="90" y="2442" fill="#cbd5e1" font-size="12">3) EquityWorkflowReceiver.sol -&gt; PrivateEmployeeEquity.sol: updateEmploymentStatus(), setGoalAchieved(), setClaimRequirements(), depositToVault()</text>
+  <text x="90" y="2468" fill="#cbd5e1" font-size="12">4) EquityWorkflowReceiver.sol -&gt; Token(ERC3643): setAddressFrozen(), mint(), setCompliance()</text>
+  <text x="90" y="2494" fill="#cbd5e1" font-size="12">5) ComplianceV2.sol -&gt; IdentityRegistry.sol: canTransfer() uses isVerified() for both parties</text>
+  <text x="90" y="2520" fill="#cbd5e1" font-size="12">6) PrivateEmployeeEquity.sol -&gt; ACE Vault (IVault): deposit() and withdrawWithTicket() wrappers</text>
+
+  <rect x="30" y="2580" width="1780" height="60" rx="10" fill="#1e293b" stroke="#334155"/>
+  <text x="920" y="2617" text-anchor="middle" fill="#93c5fd" font-size="13">
+    This version names protocol contracts explicitly and shows exact interaction paths validated against main.ts + E2E test + Solidity contracts.
+  </text>
+</svg>
