@@ -1,297 +1,168 @@
-# Equity CRE — Interactive Test Runner Guide
+# Equity CRE E2E Guide (Current)
 
-**Script:** `EquityWorkflowCre/tests/run-tests.mjs`
+Last updated: 2026-03-06
 
----
+This guide replaces the old interactive runner docs (`tests/run-tests.mjs`).
 
-## Prerequisites
+Current E2E test runners:
+- `tests/run-lambda-cre-ace-ticket-flow.mjs`
+- `tests/run-private-rounds-market-flow.mjs`
+
+Reference overview:
+- `Docs/Main-E2E-Commands.md`
+
+## 1. Prerequisites
 
 | Requirement | Details |
 |---|---|
-| **Node.js** | v18 or later |
-| **CRE CLI** | Installed and authenticated (`cre login`) |
-| **Base Sepolia ETH** | Wallet needs gas for `--broadcast` transactions |
-| **`.env` file** | At `tokenized-asset-servicing/.env` (see below) |
+| Node.js | v18 or later |
+| CRE CLI | Installed and authenticated (`cre login`) |
+| Sepolia ETH | Admin and employee wallets need gas |
+| `.env` file | Repo root: `tokenized-asset-servicing/.env` |
 
-### Required `.env` Variables
+## 2. Commands
 
-```env
-# Private key of the wallet that signs CRE workflow transactions
-CRE_ETH_PRIVATE_KEY=0x<your_64_hex_chars>
-
-# AWS Lambda function URL (the equity backend)
-LAMBDA_URL=https://<your-id>.lambda-url.us-east-2.on.aws/
-```
-
-> **Note:** `LAMBDA_URL` is already set in both config files. The `.env` override takes precedence.
-
----
-
-## Contract Addresses (Base Sepolia)
-
-| Contract | Address |
-|---|---|
-| `EquityWorkflowReceiver` | `0x83905819019A6DeeDFF834f08DeC8238e54EBf6e` |
-| `IdentityRegistry` | `0x31D26dE5f5a255D0748035D90Ec739840df55280` |
-| `EmployeeVesting` | `0x78a40e81b6C7770B686D6D0812431422B2CC6dbb` |
-| `Token` (ERC-3643, `EQT`) | `0x2a177f9498edAB038eBA5f094526f76118E2416F` |
-
-> `IdentityRegistry` and `Token` ownership have been transferred to `EquityWorkflowReceiver`.  
-> `EquityWorkflowReceiver` is also the sole authorized oracle in `EmployeeVesting`.  
-> **All on-chain writes must go through CRE → Receiver.**
-
----
-
-## How to Run
+Run from repository root:
 
 ```bash
-cd EquityWorkflowCre
-node tests/run-tests.mjs
+npm --prefix EquityWorkflowCre run test:lambda-cre-ace-ticket
+npm --prefix EquityWorkflowCre run test:private-rounds-market
 ```
 
-On startup the script:
-1. Reads `config.staging.json` for contract addresses.
-2. Reads `.env` for `CRE_ETH_PRIVATE_KEY` and `LAMBDA_URL`.
-3. Resolves `Token` address live from `EquityWorkflowReceiver.token()` on-chain.
-4. Displays the interactive menu.
+Direct script execution:
 
----
-
-## Menu Reference
-
-```
-1) SYNC_KYC                   — Register / update employee KYC on-chain
-2) SYNC_EMPLOYMENT_STATUS      — Activate or terminate an employee
-3) SYNC_GOAL                  — Mark a performance goal as achieved/pending
-4) SYNC_FREEZE_WALLET          — Freeze or unfreeze a token wallet
-5) Full 3-Tier Round-Trip      — Automated KYC sync with default test data
-6) Read Employee Record        — Query DynamoDB + live on-chain state summary
-7) List All Employees          — Table view of all DynamoDB employee records
-8) Create Vesting Grant        — DynamoDB metadata + CRE SYNC_CREATE_GRANT on-chain
-9) Automated Bulk Sequence     — Loads mock-employees.json, sends SYNC_BATCH
-0) Exit
+```bash
+node EquityWorkflowCre/tests/run-lambda-cre-ace-ticket-flow.mjs
+node EquityWorkflowCre/tests/run-private-rounds-market-flow.mjs
 ```
 
----
+Recommended order:
+1. `test:lambda-cre-ace-ticket`
+2. `test:private-rounds-market`
 
-## Flow per Sync Action (Options 1–4)
+## 3. Required Environment Variables
 
-Every sync action follows this 5-step flow:
+Required for both E2E scripts:
 
+```env
+CRE_ETH_PRIVATE_KEY=0x<64_hex_chars>
+CRE_EMPLOYEE_ETH_PRIVATE_KEY=0x<64_hex_chars>
 ```
-Step 1  Lambda (DynamoDB persist)
-Step 2  CRE simulate --broadcast  →  EquityWorkflowReceiver.onReport()  →  target contract
-Step 3  Fetch tx receipt  +  on-chain state verification (via viem readContract)
-Step 4  CRE log trigger  →  relay on-chain event back to Lambda  [see exceptions below]
-Step 5  Lambda readEmployee — confirm DynamoDB record updated
+
+Also required for Lambda + ACE flow:
+
+```env
+LAMBDA_URL=https://<your-lambda-function-url>
 ```
 
-### Step 4 Exception — SYNC_FREEZE_WALLET
+Notes:
+- `LAMBDA_URL` can fallback to `config.staging.json` (`config.url`) but `.env` is recommended.
+- `CRE_ETH_PRIVATE_KEY` and `CRE_EMPLOYEE_ETH_PRIVATE_KEY` must resolve to different addresses.
 
-`main.ts` only watches **IdentityRegistry** (trigger 1) and **EmployeeVesting** (trigger 2) log events.  
-The `Token` contract's `AddressFrozen` event is **not** captured. Therefore:
+## 4. Optional Environment Variables
 
-- **Step 4 is automatically skipped** for `SYNC_FREEZE_WALLET`.
-- On-chain state is still confirmed in **Step 3b** via `Token.isFrozen(address)`.
-- The DynamoDB record is updated in **Step 1** (before the CRE broadcast).
+Common:
+- `SEPOLIA_RPC_URL`
+- `USE_DIRECT_RECEIVER_REPORTS`
+- `LOG_CRE_OUTPUT`
 
-### CRE Trigger Index Mapping
+Lambda + ACE flow (`run-lambda-cre-ace-ticket-flow.mjs`):
+- `LOG_ACE_OUTPUT`
+- `TOKEN_ADDRESS`
+- `ACE_VAULT_ADDRESS`
+- `ACE_API_URL`
+- `ACE_CHAIN_ID`
+- `COMPLIANCE_V2_ADDRESS` (or `COMPLIANCE_ADDRESS`)
+- `CRE_EMPLOYEE_IDENTITY_ADDRESS`
+- `CRE_ADMIN_IDENTITY_ADDRESS`
+- `CRE_ACE_VAULT_IDENTITY_ADDRESS`
+- `CRE_EMPLOYEE_COUNTRY`
+- `ACE_E2E_AMOUNT_WEI`
+- `ACE_EMPLOYEE_MIN_GAS_WEI`
+- `STRICT_ONCHAIN_KYC`
+- `ACE_SIMULATE_GOAL_CLIFF`
+- `ACE_SIMULATED_CLIFF_LEAD_SECONDS`
+- `ACE_VESTING_GOAL_ID`
 
-| Index | Handler | Triggered when |
+Private rounds flow (`run-private-rounds-market-flow.mjs`):
+- `TOKEN_ADDRESS`
+- `COMPLIANCE_V2_ADDRESS` (or `COMPLIANCE_ADDRESS`)
+- `PRIVATE_ROUNDS_MARKET_ADDRESS`
+- `USDC_ADDRESS`
+- `PRIVATE_ROUNDS_TREASURY_ADDRESS`
+
+## 5. Flow A: Lambda -> CRE/Receiver -> ACE Ticket -> Redeem
+
+Script:
+- `tests/run-lambda-cre-ace-ticket-flow.mjs`
+
+What it validates:
+1. Persist employee state in Lambda (`CompanyEmployeeInput`).
+2. Onchain sync via CRE/Receiver:
+   - `SYNC_KYC`
+   - `SYNC_FREEZE_WALLET`
+   - compliance and investor authorization baseline
+3. Onchain employee requirement checks.
+4. Optional simulated vesting gate checks (`employment + goal + cliff`) when enabled.
+5. Admin private balance readiness in ACE (mint/deposit if needed).
+6. ACE private transfer admin -> employee.
+7. Employee withdraw ticket request + onchain `withdrawWithTicket` redeem.
+
+Success banner:
+- `SUCCESS: Employee compliant + ACE ticket redeemed`
+
+Execution mode:
+- Default: `CRE simulate --broadcast`
+- Optional bypass: direct `receiver.onReport()` with `USE_DIRECT_RECEIVER_REPORTS=true`
+
+CRE output behavior:
+- Output is streamed live to console, preserving ANSI colors.
+
+## 6. Flow B: Private Rounds Market (USDC + ComplianceV2)
+
+Script:
+- `tests/run-private-rounds-market-flow.mjs`
+
+What it validates:
+1. Compliance + KYC + investor auth baseline.
+2. Round create/open + allowlist setup.
+3. Unauthorized buy revert.
+4. Authorized buy + oracle settle path.
+5. Investor cap enforcement.
+6. Oracle refund path.
+7. Global resale restrictions:
+   - lockup active revert
+   - unauthorized recipient revert
+
+Success banner:
+- `SUCCESS: Private rounds market + global compliance validated`
+
+Execution mode:
+- Default: direct `receiver.onReport()` (`USE_DIRECT_RECEIVER_REPORTS=true`)
+- Optional CRE path: set `USE_DIRECT_RECEIVER_REPORTS=false`
+
+## 7. Address Source of Truth
+
+Both scripts load contract addresses from:
+- `EquityWorkflowCre/config.staging.json`
+
+Optional `.env` overrides apply for selected addresses.
+If required addresses are missing, scripts fail fast.
+
+## 8. Troubleshooting
+
+| Symptom | Likely Cause | Fix |
 |---|---|---|
-| `0` | HTTP trigger | You call CRE to write a report to the blockchain |
-| `1` | IdentityRegistry log | `IdentityRegistered`, `IdentityRemoved`, `CountryUpdated` events |
-| `2` | EmployeeVesting log | `GrantCreated`, `EmploymentStatusUpdated`, `GoalUpdated`, etc. |
+| `Missing CRE_ETH_PRIVATE_KEY` or `Missing CRE_EMPLOYEE_ETH_PRIVATE_KEY` | Missing env vars | Set keys in `.env` |
+| `Admin and employee private keys resolve to the same address` | Same private key used twice | Use distinct wallets |
+| `Missing LAMBDA_URL (.env or config)` | No Lambda URL configured | Set `LAMBDA_URL` in `.env` or `config.staging.json` |
+| `CRE command failed` | CRE CLI missing/auth issue/network issue | Install/login CRE CLI, retry |
+| `HTTP payload is not valid JSON` | Broken CLI payload quoting | Use current scripts (already fixed) and avoid manual shell-quoted JSON on Windows |
+| `No tx hash found in output` | CRE output changed or broadcast not executed | Ensure `--broadcast` and inspect CLI logs |
+| `Missing receiver/token/compliance/market/usdc address` | Incomplete config/env after deploy | Update `config.staging.json` and/or `.env` |
+| `Expected revert` checks failing | Compliance/allowlist/lockup state not in expected setup | Re-run baseline steps, verify environment parity |
 
----
+## 9. Legacy Note
 
-## Option-by-Option Guide
-
-### Option 1 — SYNC_KYC
-
-Registers or updates an employee's KYC identity on-chain via `IdentityRegistry`.
-
-**Prompts:**
-- `Employee wallet address` — the employee's `0x...` Ethereum wallet.
-- `KYC verified?` — `Y` to register, `N` to remove from registry.
-- `Identity contract address` *(if verified=Y)* — must be a **non-zero** address (e.g. their on-chain ONCHAINID contract, or any valid address for testing).
-- `Country code` *(if verified=Y)* — ISO 3166 numeric (e.g. `840` = United States).
-
-**What happens on-chain:**
-- If `verified=true` and not yet registered → calls `registerIdentity(employee, identity, country)`.
-- If `verified=true` and already registered with a different identity → re-registers.
-- If `verified=true` and same identity → calls `setCountry(employee, country)`.
-- If `verified=false` → calls `deleteIdentity(employee)`.
-
-**On-chain verification (Step 3b):**
-```
-IdentityRegistry.isVerified(address)   → bool
-IdentityRegistry.identity(address)     → address
-IdentityRegistry.investorCountry(address) → uint16
-```
-
----
-
-### Option 2 — SYNC_EMPLOYMENT_STATUS
-
-Updates the employee's employment flag in `EmployeeVesting`.
-
-**Prompts:**
-- `Employee wallet address`
-- `Currently employed?` — `Y` = active, `N` = terminated.
-
-**What happens on-chain:** calls `EmployeeVesting.updateEmploymentStatus(address, bool)`.
-
-> If terminated and the grant is revocable, use `EmployeeVesting.revoke()` separately (owner-only, requires direct tx or CRE admin action).
-
-**On-chain verification:**
-```
-EmployeeVesting.isEmployed(address) → bool
-```
-
----
-
-### Option 3 — SYNC_GOAL
-
-Marks a performance goal ID as achieved or not in `EmployeeVesting`.
-
-**Prompts:**
-- `Goal ID (bytes32 hex)` — e.g. `0x000...0001`. Must be 66 hex chars (`0x` + 64).
-- `Goal achieved?`
-
-**What happens on-chain:** calls `EmployeeVesting.setGoalAchieved(bytes32, bool)`.
-
-> Goals are stored as `goal:<goalId>` records in DynamoDB, **not** inside the employee record.  
-> On-chain verification reads `EmployeeVesting.goalsAchieved(bytes32)`.
-
-**On-chain verification:**
-```
-EmployeeVesting.goalsAchieved(bytes32) → bool
-```
-
----
-
-### Option 4 — SYNC_FREEZE_WALLET
-
-Freezes or unfreezes a wallet on the ERC-3643 Token contract.
-
-**Prompts:**
-- `Wallet address`
-- `Freeze wallet?` — `Y` = freeze, `N` = unfreeze.
-
-**What happens on-chain:** calls `Token.setAddressFrozen(address, bool)` (via Receiver, which owns Token).
-
-> ⚠ **Step 4 (log trigger) is SKIPPED** — `Token.AddressFrozen` is not watched by `main.ts`.  
-> On-chain state is confirmed via `Token.isFrozen()` in Step 3b.
-
-**On-chain verification:**
-```
-Token.isFrozen(address) → bool
-```
-
----
-
-### Option 5 — Full Round-Trip Test
-
-Runs `SYNC_KYC` automatically with fixed test data:
-
-| Field | Value |
-|---|---|
-| `employeeAddress` | `0x1111111111111111111111111111111111111111` |
-| `identityAddress` | `0x2222222222222222222222222222222222222222` |
-| `country` | `840` (US) |
-| `verified` | `true` |
-
-No prompts — confirms and runs immediately.
-
----
-
-### Option 6 — Read Employee Record
-
-Queries DynamoDB by `employeeAddress` and shows:
-- Full DynamoDB record (all stored fields).
-- Live on-chain state summary: `isVerified`, `investorCountry`, `isEmployed`, `isFrozen`.
-
----
-
-### Option 7 — List All Employees
-
-Scans the `EquityEmployeeState` DynamoDB table and prints a summary table with KYC, employment, freeze, and last event columns. **Read-only — no on-chain interaction.**
-
----
-
-### Option 8 — Create Vesting Grant
-
-Runs **3 phases** in sequence:
-
-**Why not just CRE for everything?**  
-`EmployeeVesting.createGrant()` is `onlyOwner`. The `EquityWorkflowReceiver` was only granted **oracle rights** (`setOracle`), not ownership of `EmployeeVesting`. CRE can only call functions accessible to the Receiver.
-
-#### Phase A — Lambda (DynamoDB metadata persist)
-Stores vesting schedule parameters for the employee in DynamoDB.
-
-#### Phase B — CRE → `SYNC_EMPLOYMENT_STATUS` on-chain
-Uses the full 3-tier CRE flow to call `EmployeeVesting.updateEmploymentStatus(address, true)` via the Receiver oracle. This registers the employee as **active on-chain** and eligible to receive a grant.
-
-```
-Lambda → CRE → EquityWorkflowReceiver → EmployeeVesting.updateEmploymentStatus()
-                                          ↓ EmploymentStatusUpdated event
-CRE log trigger 2 → Lambda (DynamoDB sync)
-```
-
-On-chain verification: `EmployeeVesting.isEmployed(address) → true`
-
-#### Phase C — Manual owner wallet (printed instructions)
-After Phase B, the script prints the exact transaction calls the **owner wallet** must execute to finalize the on-chain grant:
-
-1. `Token.approve(EmployeeVesting, amount)` — fund the vesting pool
-2. `EmployeeVesting.createGrant(employee, amount, startTime, cliff, duration, revocable, goalId)`
-
-Once `GrantCreated` is emitted, **CRE log trigger 2** will automatically sync it back to Lambda/DynamoDB.
-
-**Prompts:**
-- Employee wallet address
-- Total vesting amount (integer, in token units)
-- Cliff period (months)
-- Vesting duration (months)
-- Revocable? (Y/N)
-- Notes (free text)
-
----
-
-### Option 9 — Automated Bulk Sequence (SYNC_BATCH)
-
-Loads all employees from `tests/mock-employees.json` and processes them in a **single batched transaction** using the `SYNC_BATCH` action type.
-
-**Flow:**
-1. Reads `mock-employees.json` (20 employees by default).
-2. Persists all employees to DynamoDB via `CompanyEmployeeBatchInput` Lambda action.
-3. Builds a `SYNC_BATCH` CRE payload containing all sync actions (KYC, Employment, Goal, Freeze, Grant) for every employee.
-4. Submits the entire batch as **one CRE `writeReport` transaction** on-chain.
-
-**Gas savings:** By bundling ~80+ individual actions into a single transaction, the base transaction overhead (21,000 gas) is paid only once instead of per-action, reducing total gas cost by ~95% in overhead fees.
-
-> **Note:** Step 4 (CRE LogTrigger) is skipped for `SYNC_BATCH` since multiple events are emitted. Individual log triggers can be tested via Options 1–4.
-
----
-
-## Troubleshooting
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| `LAMBDA_URL not found` | Missing `.env` entry | Add `LAMBDA_URL=...` to `.env` |
-| `CRE command failed` | CRE CLI not installed or not logged in | Run `cre login` and ensure `cre` is in PATH |
-| `Transient tx error — waiting...` | Nonce collision, will auto-retry up to 4× | Wait; if persistent, check wallet nonce on Basescan |
-| `No tx hash found in output` | CRE ran in dry-run mode | Ensure `--broadcast` flag is present (it is by default) |
-| `Lambda persist failed 400` | Missing required field in payload | Check action name and required params in `lambda-function/index.mjs` |
-| `isVerified = false` after SYNC_KYC | Receiver does not own IdentityRegistry | Verify ownership: call `IdentityRegistry.owner()` — must be Receiver address |
-| `isFrozen` not updated | Token ownership not with Receiver | Verify: call `Token.owner()` — must be Receiver address |
-
----
-
-## Useful Basescan Links
-
-- [EquityWorkflowReceiver](https://sepolia.etherscan.io/address/0x83905819019A6DeeDFF834f08DeC8238e54EBf6e)
-- [IdentityRegistry](https://sepolia.etherscan.io/address/0x31D26dE5f5a255D0748035D90Ec739840df55280)
-- [EmployeeVesting](https://sepolia.etherscan.io/address/0x78a40e81b6C7770B686D6D0812431422B2CC6dbb)
-- [Token (EQT)](https://sepolia.etherscan.io/address/0x2a177f9498edAB038eBA5f094526f76118E2416F)
+The old guide for `tests/run-tests.mjs` is obsolete.
+Use the two E2E scripts above as the canonical test paths.
