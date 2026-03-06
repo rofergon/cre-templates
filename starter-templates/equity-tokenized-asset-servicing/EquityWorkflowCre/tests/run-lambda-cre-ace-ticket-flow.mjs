@@ -23,7 +23,7 @@
  *   STRICT_ONCHAIN_KYC=false
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -276,12 +276,6 @@ const pretty = (value) =>
     2,
   );
 
-const indentText = (text, indent = "      ") =>
-  String(text || "")
-    .split(/\r?\n/)
-    .map((line) => `${indent}${line}`)
-    .join("\n");
-
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const isTransientTxError = (text) => {
@@ -300,6 +294,33 @@ const extractTxHash = (text) => {
   }
   return matches[matches.length - 1];
 };
+
+const runCommandStreaming = (cmd, args, options = {}) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout?.on("data", (chunk) => {
+      const text = chunk.toString();
+      stdout += text;
+      if (options.onStdout) options.onStdout(text);
+    });
+
+    child.stderr?.on("data", (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      if (options.onStderr) options.onStderr(text);
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ status: code ?? 1, stdout, stderr }));
+  });
 
 const getTimestampFactory = () => {
   let last = 0;
@@ -441,8 +462,13 @@ const run = async () => {
   childEnv.CRE_ETH_PRIVATE_KEY = adminPk;
   childEnv.LAMBDA_URL = lambdaUrl;
   childEnv.CRE_TARGET = "local-simulation";
+  childEnv.FORCE_COLOR = childEnv.FORCE_COLOR || "1";
+  childEnv.CLICOLOR_FORCE = childEnv.CLICOLOR_FORCE || "1";
 
   const runCre = async (payload) => {
+    const payloadJson = JSON.stringify(payload, (_, value) =>
+      typeof value === "bigint" ? value.toString() : value,
+    );
     const args = [
       "workflow",
       "simulate",
@@ -453,19 +479,23 @@ const run = async () => {
       "--trigger-index",
       "0",
       "--http-payload",
-      JSON.stringify(payload),
+      payloadJson,
       "--broadcast",
     ];
 
     let lastOutput = "";
     for (let attempt = 1; attempt <= 4; attempt++) {
-      const out = spawnSync("cre", args, { cwd: projectRoot, encoding: "utf-8", env: childEnv, shell: true });
-      const merged = `${out.stdout || ""}\n${out.stderr || ""}`;
-      lastOutput = merged;
       if (logCreOutput) {
         console.log(`   [CRE CLI attempt ${attempt}] payload: ${payload.action}`);
-        console.log(indentText(merged.trim() || "(no output)"));
       }
+      const out = await runCommandStreaming("cre", args, {
+        cwd: projectRoot,
+        env: childEnv,
+        onStdout: logCreOutput ? (text) => process.stdout.write(text) : undefined,
+        onStderr: logCreOutput ? (text) => process.stderr.write(text) : undefined,
+      });
+      const merged = `${out.stdout || ""}\n${out.stderr || ""}`;
+      lastOutput = merged;
       if (out.status === 0) return extractTxHash(merged);
       if (attempt < 4 && isTransientTxError(merged)) {
         await wait(15000);
