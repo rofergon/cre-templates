@@ -2,7 +2,7 @@
 
 CRE workflow for this repo's current stack:
 - `IdentityRegistry + Token + ComplianceV2 + PrivateEmployeeEquity + PrivateRoundsMarket`
-- ACE private rail integration (private transfer + withdraw ticket)
+- CCC private rail integration (private transfer + withdraw ticket)
 - Lambda/DynamoDB bidirectional synchronization
 
 Current mode in this repository: local simulation oriented (`local-simulation` target).
