@@ -189,8 +189,6 @@ cd EquityWorkflowCre
 Then you can run the tests:
 
 ```bash
-npm run test:sync-write
-npm run test:lambda-sync
 npm run test:lambda-cre-ace-ticket
 npm run test:private-rounds-market
 ```

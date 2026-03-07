@@ -262,35 +262,33 @@ Para `EmployeeVesting` cambia a `--trigger-index 2`.
 
 ## 12) Pruebas del workflow
 
-## 12.1 Runner interactivo
-- `EquityWorkflowCre/tests/run-tests.mjs`
-
-Funcionalidades:
-
-- SYNC_KYC
-- SYNC_EMPLOYMENT_STATUS
-- SYNC_GOAL
-- SYNC_FREEZE_WALLET
-- SYNC_CREATE_GRANT
-- SYNC_BATCH
-- lectura/listado en Lambda
-
-## 12.2 E2E sync write
-- `EquityWorkflowCre/tests/run-sync-write-test.mjs`
+## 12.1 E2E principal (Lambda + ACE ticket)
+- `EquityWorkflowCre/tests/run-lambda-cre-ace-ticket-flow.mjs`
 
 Valida:
 
-1. HTTP trigger (write)
-2. receipt + event index
-3. log trigger replay
-4. verificacion de record en Lambda/DynamoDB
+1. Persistencia en Lambda
+2. Sync on-chain por CRE/Receiver (KYC, freeze, compliance baseline)
+3. Flujo ACE (private transfer + withdraw ticket)
+4. Redeem on-chain con `withdrawWithTicket`
 
-Incluye manejo de nonce bajo reemplazo (opcional `AUTO_BUMP_NONCE=false`).
+## 12.2 E2E private rounds market
+- `EquityWorkflowCre/tests/run-private-rounds-market-flow.mjs`
 
-## 12.3 Simulacion 3 capas
-- `EquityWorkflowCre/tests/run-lambda-sync-simulation.mjs`
+Valida:
 
-Ejecuta secuencia Lambda -> CRE -> Chain -> CRE -> Lambda.
+1. KYC + autorizacion de inversor + compliance
+2. Creacion/apertura de ronda y allowlist
+3. Rechazos esperados (unauthorized buy, cap excedido)
+4. Flujo de settlement + refund
+5. Restricciones globales de reventa (lockup + destinatario no autorizado)
+
+Comandos:
+
+```bash
+npm --prefix EquityWorkflowCre run test:lambda-cre-ace-ticket
+npm --prefix EquityWorkflowCre run test:private-rounds-market
+```
 
 ## 13) Checklist de produccion
 

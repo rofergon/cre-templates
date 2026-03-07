@@ -211,8 +211,6 @@ node -e "const {spawnSync}=require('child_process'); const p=JSON.stringify({act
 CRE and protocol E2E:
 
 ```bash
-npm --prefix EquityWorkflowCre run test:sync-write
-npm --prefix EquityWorkflowCre run test:lambda-sync
 npm --prefix EquityWorkflowCre run test:lambda-cre-ace-ticket
 npm --prefix EquityWorkflowCre run test:private-rounds-market
 ```
