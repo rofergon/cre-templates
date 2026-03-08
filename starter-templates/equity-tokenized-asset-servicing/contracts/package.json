@@ -8,7 +8,10 @@
     "compile": "hardhat compile",
     "ace:setup-policy": "hardhat run scripts/setup_ace_policy.cjs --network sepolia",
     "deploy:equity:new": "hardhat run scripts/deploy_equity_new.cjs --network sepolia",
-    "deploy:equity:new:test-mode": "TEST_MODE_FORWARDER_BYPASS=true AUTO_UPDATE_CRE_CONFIGS=true AUTO_UPDATE_DOTENV=true hardhat run scripts/deploy_equity_new.cjs --network sepolia"
+    "deploy:equity:new:test-mode": "cross-env TEST_MODE_FORWARDER_BYPASS=true AUTO_UPDATE_CRE_CONFIGS=true AUTO_UPDATE_DOTENV=true hardhat run scripts/deploy_equity_new.cjs --network sepolia",
+    "verify:equity:latest": "hardhat run scripts/verify_equity_latest.cjs --network sepolia",
+    "deploy:equity:new:verify": "npm run deploy:equity:new && npm run verify:equity:latest",
+    "deploy:equity:new:test-mode:verify": "npm run deploy:equity:new:test-mode && npm run verify:equity:latest"
   },
   "author": "",
   "license": "MIT",
