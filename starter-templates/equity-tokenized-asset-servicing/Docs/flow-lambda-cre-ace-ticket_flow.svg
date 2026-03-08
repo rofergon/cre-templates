@@ -83,7 +83,7 @@
   <text x="60" y="304" fill="#f59e0b" font-size="20" font-weight="700">Step 1. Persist employee state in Lambda</text>
   <text x="60" y="494" fill="#60a5fa" font-size="20" font-weight="700">Step 2. CRE submits on-chain sync actions through EquityWorkflowReceiver.sol</text>
   <text x="60" y="934" fill="#c084fc" font-size="20" font-weight="700">Step 3. Eligibility simulation path (PrivateEmployeeEquity + wallet freeze sync)</text>
-  <text x="60" y="1314" fill="#2dd4bf" font-size="20" font-weight="700">Step 4. Optional admin top-up into ACE Vault (public token to private balance)</text>
+  <text x="60" y="1314" fill="#2dd4bf" font-size="20" font-weight="700">Step 4. Optional admin top-up into CCC Vault (public token to private balance)</text>
   <text x="60" y="1654" fill="#4ade80" font-size="20" font-weight="700">Step 5. ACE private transfer and withdraw ticket generation</text>
   <text x="60" y="1974" fill="#f87171" font-size="20" font-weight="700">Step 6. Employee redeems ticket on-chain</text>
   <text x="60" y="2294" fill="#93c5fd" font-size="20" font-weight="700">Step 7. Contract interaction matrix extracted from Solidity</text>
@@ -155,7 +155,7 @@
   <text x="840" y="1348" text-anchor="middle" fill="#e2e8f0" font-size="12">Token.approve(vault, amount)</text>
 
   <line x1="120" y1="1410" x2="1740" y2="1410" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="930" y="1398" text-anchor="middle" fill="#e2e8f0" font-size="12">ACE Vault.deposit(token, amount)</text>
+  <text x="930" y="1398" text-anchor="middle" fill="#e2e8f0" font-size="12">CCC Vault.deposit(token, amount)</text>
 
   <line x1="1740" y1="1450" x2="1560" y2="1450" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
   <text x="1650" y="1438" text-anchor="middle" fill="#e2e8f0" font-size="12">vault triggers token movement</text>
@@ -180,7 +180,7 @@
 
   <!-- Step 6 -->
   <line x1="300" y1="2020" x2="1740" y2="2020" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
-  <text x="1020" y="2008" text-anchor="middle" fill="#e2e8f0" font-size="12">Employee sends on-chain tx: ACE Vault.withdrawWithTicket(token, amount, ticket)</text>
+  <text x="1020" y="2008" text-anchor="middle" fill="#e2e8f0" font-size="12">Employee sends on-chain tx: CCC Vault.withdrawWithTicket(token, amount, ticket)</text>
 
   <line x1="1740" y1="2060" x2="1560" y2="2060" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
   <text x="1650" y="2048" text-anchor="middle" fill="#e2e8f0" font-size="12">ticket verified, token release path</text>
@@ -203,10 +203,11 @@
   <text x="90" y="2442" fill="#cbd5e1" font-size="12">3) EquityWorkflowReceiver.sol -&gt; PrivateEmployeeEquity.sol: updateEmploymentStatus(), setGoalAchieved(), setClaimRequirements(), depositToVault()</text>
   <text x="90" y="2468" fill="#cbd5e1" font-size="12">4) EquityWorkflowReceiver.sol -&gt; Token(ERC3643): setAddressFrozen(), mint(), setCompliance()</text>
   <text x="90" y="2494" fill="#cbd5e1" font-size="12">5) ComplianceV2.sol -&gt; IdentityRegistry.sol: canTransfer() uses isVerified() for both parties</text>
-  <text x="90" y="2520" fill="#cbd5e1" font-size="12">6) PrivateEmployeeEquity.sol -&gt; ACE Vault (IVault): deposit() and withdrawWithTicket() wrappers</text>
+  <text x="90" y="2520" fill="#cbd5e1" font-size="12">6) PrivateEmployeeEquity.sol -&gt; CCC Vault (IVault): deposit() and withdrawWithTicket() wrappers</text>
 
   <rect x="30" y="2580" width="1780" height="60" rx="10" fill="#1e293b" stroke="#334155"/>
   <text x="920" y="2617" text-anchor="middle" fill="#93c5fd" font-size="13">
     This version names protocol contracts explicitly and shows exact interaction paths validated against main.ts + E2E test + Solidity contracts.
   </text>
 </svg>
+

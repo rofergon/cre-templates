@@ -18,7 +18,7 @@ From `contracts/deployments/equity-latest.sepolia.json`:
 - PrivateEmployeeEquity: `0x853b8cd153BBB7340489F530FA9968DE7Cb2AAb2`
 - PrivateRoundsMarket: `0x39a7b9Bcd125B1396BFfb5aF828bDe229F87C544`
 - MockUSDC: `0x58384dFD613F0B8408b4197A031ED1E36F55868c`
-- ACE Vault: `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
+- Chainlink Confidential Compute Vault (CCC Vault): `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
 
 ## Supported HTTP Actions
 
@@ -30,7 +30,7 @@ From `contracts/deployments/equity-latest.sepolia.json`:
 | `SYNC_EMPLOYMENT_STATUS` | 1 | Update employment in `PrivateEmployeeEquity` |
 | `SYNC_GOAL` | 2 | Update goal status in `PrivateEmployeeEquity` |
 | `SYNC_FREEZE_WALLET` | 3 | Freeze/unfreeze address in `Token` |
-| `SYNC_PRIVATE_DEPOSIT` | 4 | Deposit protocol tokens to ACE vault via `PrivateEmployeeEquity` |
+| `SYNC_PRIVATE_DEPOSIT` | 4 | Deposit protocol tokens to the CCC Vault via `PrivateEmployeeEquity` |
 | `SYNC_BATCH` | 5 | Execute multiple nested actions in one tx |
 | `SYNC_REDEEM_TICKET` | 6 | Disabled by design |
 | `SYNC_MINT` | 7 | Mint token via `Token.mint` |
@@ -216,6 +216,7 @@ Common optional:
 ## Important Notes
 
 - `SYNC_REDEEM_TICKET` is intentionally disabled in receiver.
-  Use `ACE_WITHDRAW_TICKET` and redeem directly from employee wallet with `vault.withdrawWithTicket(...)`.
+  Use `ACE_WITHDRAW_TICKET` and redeem directly from the employee wallet with `vault.withdrawWithTicket(...)` on the CCC Vault.
 - Confidential HTTP is experimental and currently targeted to CRE simulation workflows.
 - This workflow is currently operated for Sepolia/local-simulation validation and demos.
+

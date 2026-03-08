@@ -44,7 +44,7 @@
   <rect x="84" y="346" width="420" height="124" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
   <text x="294" y="374" text-anchor="middle" font-size="16" font-weight="700" fill="#1d4ed8">4) Funding branch (if private balance is low)</text>
   <text x="294" y="394" text-anchor="middle" font-size="12" fill="#1e3a8a">Optional `SYNC_MINT` to admin, then KYC checks for admin + vault.</text>
-  <text x="294" y="412" text-anchor="middle" font-size="12" fill="#1e3a8a">`approve + deposit` into official ACE vault.</text>
+  <text x="294" y="412" text-anchor="middle" font-size="12" fill="#1e3a8a">`approve + deposit` into the CCC Vault.</text>
   <text x="294" y="432" text-anchor="middle" font-size="11" fill="#2563eb">Why: ERC-3643 requires receiver verification ("Receiver not verified" fix).</text>
   <rect x="184" y="440" width="220" height="20" rx="8" fill="#ffffff" stroke="#bfdbfe" stroke-width="1"/>
   <text x="294" y="454" text-anchor="middle" font-size="10" fill="#1d4ed8">Gate: checkDepositAllowed()</text>
@@ -81,3 +81,4 @@
   <rect x="1014" y="706" width="214" height="28" rx="14" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
   <text x="1121" y="725" text-anchor="middle" font-size="11" fill="#15803d">API: convergence2026-token-api.cldev.cloud</text>
 </svg>
+

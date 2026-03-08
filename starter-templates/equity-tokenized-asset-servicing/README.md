@@ -3,7 +3,7 @@
 End-to-end reference implementation for a tokenized equity protocol with:
 - ERC-3643 style compliance and identity controls.
 - Chainlink CRE workflow for Web2 <-> Onchain synchronization.
-- Chainlink ACE private rail (private balances, private transfers, withdraw ticket redemption).
+- Chainlink ACE private rail backed by the Chainlink Confidential Compute Vault (CCC Vault).
 - Issuer-custodied private rounds market with USDC escrow and settlement/refund lifecycle.
 
 This repository is currently operated in local simulation mode for workflow execution and testing.
@@ -19,7 +19,7 @@ Deployed at: `2026-02-25T00:05:26.113Z`
 | Component | Address |
 |---|---|
 | CRE Forwarder (Sepolia) | [`0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`](https://sepolia.etherscan.io/address/0x82300bd7c3958625581cc2f77bc6464dcecdf3e5) |
-| ACE Vault (official demo) | [`0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`](https://sepolia.etherscan.io/address/0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13) |
+| Chainlink Confidential Compute Vault (CCC Vault) | [`0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`](https://sepolia.etherscan.io/address/0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13) |
 | EquityWorkflowReceiver | [`0x1C312E03A316Eab45e468bf3a0F8171873cd2188`](https://sepolia.etherscan.io/address/0x1C312E03A316Eab45e468bf3a0F8171873cd2188) |
 | IdentityRegistry | [`0x032a3Be70148aE44C362345271485C917eb73355`](https://sepolia.etherscan.io/address/0x032a3Be70148aE44C362345271485C917eb73355) |
 | ComplianceV2 | [`0xEEd878eeA3D23095d5c1939471b0b130f4d9c265`](https://sepolia.etherscan.io/address/0xEEd878eeA3D23095d5c1939471b0b130f4d9c265) |
@@ -91,7 +91,7 @@ Main contracts:
   - lockup enforcement,
   - trusted counterparties,
   - mint restricted to authorized/trusted verified receivers.
-- `PrivateEmployeeEquity.sol`: employment/goal/cliff gating + ACE vault deposit rail.
+- `PrivateEmployeeEquity.sol`: employment/goal/cliff gating + CCC Vault deposit rail.
 - `PrivateRoundsMarket.sol`: private rounds with allowlist caps, USDC escrow, purchase states (`PENDING`, `SETTLED`, `REFUNDED`), settlement/refund paths.
 - `EquityWorkflowReceiver.sol`: single CRE entry point that dispatches all action types.
 
@@ -109,10 +109,10 @@ Persists state in DynamoDB and can trigger CRE sync payloads for:
 
 1. Company updates employee state in Lambda.
 2. CRE executes onchain sync (KYC, freeze, requirements, etc.).
-3. Admin deposits token liquidity into ACE vault via private rail.
+3. Admin deposits token liquidity into the Chainlink Confidential Compute Vault (CCC Vault).
 4. Private transfer in ACE from admin to employee.
 5. Employee requests withdraw ticket from ACE API.
-6. Employee redeems onchain with `vault.withdrawWithTicket(token, amount, ticket)`.
+6. Employee redeems onchain with `vault.withdrawWithTicket(token, amount, ticket)` from the CCC Vault.
 
 Script:
 - `npm --prefix EquityWorkflowCre run test:lambda-cre-ace-ticket`
@@ -186,7 +186,7 @@ Full redeploy in local testing mode (forwarder bypass + auto config/env updates)
 npm --prefix contracts run deploy:equity:new:test-mode
 ```
 
-Register/update ACE policy for token in official ACE vault:
+Register/update ACE policy for token in the Chainlink Confidential Compute Vault (CCC Vault):
 
 ```bash
 npm --prefix contracts run ace:setup-policy
@@ -224,7 +224,7 @@ npm --prefix lambda-function test
 ## Local Simulation Notes
 
 - Current deployed snapshot was generated with `testModeForwarderBypass=true`.
-- `SYNC_REDEEM_TICKET` is intentionally disabled in receiver. Ticket redeem must be executed by the employee wallet directly on ACE vault.
+- `SYNC_REDEEM_TICKET` is intentionally disabled in receiver. Ticket redeem must be executed by the employee wallet directly on the CCC Vault.
 - `EquityWorkflowCre/config.staging.json` and `config.production.json` are now git-ignored locally to avoid leaking Lambda URLs.
 - `secrets.yaml` is only required for deployed CRE targets. For local simulation, config + `.env` are sufficient.
 
@@ -241,3 +241,4 @@ npm --prefix lambda-function test
 - USDC payment leg is public onchain in this phase.
 - ACE privacy is applied to the token leg (private balances/transfers/tickets), not USDC.
 - This repo is configured for Sepolia testing and demo workflows, not production hardening.
+

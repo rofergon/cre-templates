@@ -1,11 +1,11 @@
 # ACE Private Transfers Toolkit
 
 This folder contains the ACE-specific tooling used by this project:
-- Foundry scripts to deploy/register policy engines and interact with the official ACE vault.
+- Foundry scripts to deploy/register policy engines and interact with the Chainlink Confidential Compute Vault (CCC Vault).
 - TypeScript API scripts to call ACE REST endpoints with EIP-712 signatures.
 
 Target network: Ethereum Sepolia (`11155111`)
-Official ACE vault used here: `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
+Chainlink Confidential Compute Vault (CCC Vault) used here: `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
 ACE API base used by scripts: `https://convergence2026-token-api.cldev.cloud`
 
 ## Folder Structure
@@ -28,7 +28,7 @@ ACE API base used by scripts: `https://convergence2026-token-api.cldev.cloud`
 ## Environment Variables
 
 Common:
-- `TOKEN_ADDRESS`: ERC-20 token address used with ACE vault.
+- `TOKEN_ADDRESS`: ERC-20 token address used with the CCC Vault.
 - `SEPOLIA_RPC_URL` or `ETH_RPC_URL`: Sepolia RPC endpoint.
 
 Foundry scripts:
@@ -79,7 +79,7 @@ forge script script/01_DeployPolicyEngine.s.sol:DeployPolicyEngine \
 
 Take the printed proxy address and set it as `POLICY_ENGINE_ADDRESS`.
 
-### 2) Register Token + Policy Engine in ACE Vault
+### 2) Register Token + Policy Engine in the CCC Vault
 
 ```bash
 forge script script/03_RegisterVault.s.sol:RegisterVault \
@@ -144,8 +144,8 @@ npm run withdraw-and-redeem -- 0xToken 1000000
 
 ## Recommended Operational Flow
 
-1. Ensure token is registered in ACE vault with a policy engine.
-2. Deposit token liquidity to ACE vault.
+1. Ensure token is registered in the CCC Vault with a policy engine.
+2. Deposit token liquidity to the CCC Vault.
 3. Use API `private-transfer` to move private balance.
 4. Use API `withdraw` to get ticket.
 5. Redeem onchain with `withdrawWithTicket` from the same account that requested the ticket.
@@ -155,3 +155,4 @@ npm run withdraw-and-redeem -- 0xToken 1000000
 - Ticket expiry is 1 hour (ACE-side). If not redeemed, ACE refunds private balance.
 - `withdraw-and-redeem.ts` is the easiest end-to-end employee path for demo/testing.
 - This folder is for Sepolia demo/testing and not production hardening.
+

@@ -5,6 +5,7 @@ This report summarizes the 2 main E2E commands of the project and what each one 
 ## Privacy Model (Current)
 
 - ACE remains the onchain privacy rail.
+- The private token custody layer is the Chainlink Confidential Compute Vault (CCC Vault).
 - Confidential HTTP is used for offchain ACE REST calls (`/shielded-address`, `/private-transfer`, `/withdraw`).
 - Lambda sync stays on standard HTTP with payload validation and redacted logs.
 
@@ -22,7 +23,7 @@ What it tests:
 2. Onchain sync via receiver/CRE (KYC, freeze, and compliance baseline).
 3. Onchain validation of employee requirements.
 4. ACE privacy flow:
-   - deposit to vault,
+   - deposit to the CCC Vault,
    - private transfer admin -> employee,
    - withdrawal ticket request.
 5. Onchain ticket redemption with `withdrawWithTicket` from the employee's wallet.
@@ -30,7 +31,7 @@ What it tests:
 
 Expected result:
 
-- E2E validation of integration `Lambda -> CRE/Receiver -> Onchain -> ACE -> final redeem`.
+- E2E validation of integration `Lambda -> CRE/Receiver -> Onchain -> ACE/CCC -> final redeem`.
 
 Minimum required variables:
 
@@ -84,3 +85,4 @@ npm --prefix EquityWorkflowCre run test:private-rounds-market
 Reason:
 
 - First you run the full general flow `Lambda -> CRE -> Onchain -> ACE -> redeem`, then drill down into the specific private market and resale restrictions case.
+

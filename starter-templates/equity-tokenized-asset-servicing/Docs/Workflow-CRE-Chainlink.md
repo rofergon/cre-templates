@@ -1,43 +1,48 @@
 # Workflow CRE Chainlink - Guia Tecnica
 
 ## 1) Objetivo
-Este documento describe en detalle la implementacion del workflow Chainlink CRE ubicada en `EquityWorkflowCre/`, incluyendo:
+
+Este documento describe la version actual del workflow Chainlink CRE ubicado en `EquityWorkflowCre/`.
+
+Cubre:
 
 - configuracion
 - triggers
 - validacion de payloads
-- ABI encoding/decoding
-- escritura on-chain (`writeReport`)
-- propagacion de logs on-chain a Lambda
-- pruebas operativas
+- codificacion ABI de reportes
+- escritura onchain via `writeReport`
+- sincronizacion onchain -> Lambda
+- integracion confidencial con ACE
+- comandos de simulacion y pruebas E2E
 
 ## 2) Archivos clave
 
 | Archivo | Rol |
 |---|---|
 | `EquityWorkflowCre/main.ts` | Workflow principal. |
-| `EquityWorkflowCre/workflow.yaml` | Targets de simulacion/staging/produccion. |
-| `EquityWorkflowCre/config.staging.json` | Config de staging/local simulation. |
-| `EquityWorkflowCre/config.production.json` | Config de produccion. |
+| `EquityWorkflowCre/workflow.yaml` | Targets de simulacion, staging y produccion. |
+| `EquityWorkflowCre/config.staging.json` | Config activa para `local-simulation`. |
+| `EquityWorkflowCre/config.production.json` | Config para despliegue productivo. |
 | `project.yaml` | RPCs por target para CRE CLI. |
-| `secrets.yaml` | Mapeo de secrets (`LAMBDA_URL`). |
+| `secrets.yaml` | Secrets para targets desplegados. |
 
-## 3) Modelo de ejecucion CRE aplicado a este proyecto
+## 3) Modelo de ejecucion
 
-El workflow usa el modelo trigger-callback:
+El workflow usa dos direcciones principales:
 
-- Trigger HTTP para aceptar comandos de negocio (`SYNC_*`).
-- Trigger de logs EVM para escuchar eventos on-chain y sincronizarlos a Lambda.
+- HTTP trigger para recibir acciones de negocio.
+- EVM log triggers para reenviar eventos onchain hacia Lambda.
 
-Conceptualmente:
+Flujo conceptual:
 
-1. trigger dispara callback
-2. callback usa capacidades (`EVMClient`, `HTTPClient`)
-3. CRE aplica consenso y entrega resultado
+1. un sistema externo envia una accion HTTP o se detecta un evento onchain
+2. el workflow usa capacidades CRE (`EVMClient`, `HTTPClient`, `ConfidentialHTTPClient`)
+3. CRE aplica consenso y ejecuta el resultado
 
-## 4) Configuracion del workflow
+## 4) Configuracion actual
 
 ## 4.1 `workflow.yaml`
+
 Targets definidos:
 
 - `local-simulation`
@@ -47,191 +52,251 @@ Targets definidos:
 Cada target define:
 
 - `workflow-path`: `./main.ts`
-- `config-path`: staging o production json
+- `config-path`: `./config.staging.json` o `./config.production.json`
 - `secrets-path`: `../secrets.yaml`
 
-## 4.2 Estructura de config (`main.ts`)
-Schema Zod (`configSchema`):
+## 4.2 Schema real de config (`main.ts`)
 
-- `url` (opcional, fallback para Lambda en simulacion)
-- `evms[]` (min 1) con:
+Campos soportados:
+
+- `url` (opcional): fallback para Lambda en simulacion
+- `aceApiUrl` (opcional)
+- `evms[]` (minimo 1) con:
   - `receiverAddress`
   - `identityRegistryAddress`
-  - `employeeVestingAddress`
+  - `acePrivacyManagerAddress`
+  - `complianceV2Address` (opcional)
+  - `privateRoundsMarketAddress` (opcional)
+  - `usdcAddress` (opcional)
+  - `treasuryAddress` (opcional)
+  - `aceVaultAddress`
+  - `aceChainId` (opcional)
   - `chainSelectorName`
   - `gasLimit`
+- `privacy` (opcional):
+  - `enableConfidentialAce`
+  - `encryptOutputAce`
+  - `redactLogs`
+  - `vaultDonSecrets[]`
+
+El workflow actual ya no usa `employeeVestingAddress`.
+
+## 5) Triggers registrados y orden operativo
+
+En `initWorkflow(config)` se registra:
+
+1. trigger HTTP en indice `0`
+2. un log trigger por cada direccion incluida en:
+   - `identityRegistryAddress`
+   - `acePrivacyManagerAddress`
+   - `complianceV2Address` si existe
+   - `privateRoundsMarketAddress` si existe
+
+En la configuracion actual el orden esperado es:
+
+1. index `0`: HTTP
+2. index `1`: `identityRegistryAddress`
+3. index `2`: `acePrivacyManagerAddress`
+4. index `3`: `complianceV2Address`
+5. index `4`: `privateRoundsMarketAddress`
 
 Nota:
-`config.staging.json` incluye tambien `tokenAddress`, pero no forma parte del schema actual del workflow.
 
-## 5) Triggers registrados y mapping de indices
+- el workflow actual no suscribe logs del token
+- `--trigger-index` debe elegirse segun ese orden al simular
 
-En `initWorkflow(config)` se registran 3 handlers en este orden:
+## 6) Acciones soportadas
 
-1. index `0`: `HTTPCapability().trigger({})`
-2. index `1`: `evmClient.logTrigger` para `identityRegistryAddress`
-3. index `2`: `evmClient.logTrigger` para `employeeVestingAddress`
+## 6.1 Acciones onchain (`SYNC_*`)
 
-Implicacion operativa:
-
-- al simular no interactivo, debes usar `--trigger-index` correcto
-- `Token` no esta suscrito como log trigger
-
-## 6) Acciones de entrada soportadas
-
-## 6.1 Schemas de payload
-Validadas con `syncInputSchema` (Zod discriminated union):
+El workflow valida estas acciones y las codifica como `abi.encode(uint8 actionType, bytes payload)`:
 
 - `SYNC_KYC`
 - `SYNC_EMPLOYMENT_STATUS`
 - `SYNC_GOAL`
 - `SYNC_FREEZE_WALLET`
-- `SYNC_CREATE_GRANT`
+- `SYNC_PRIVATE_DEPOSIT`
 - `SYNC_BATCH`
+- `SYNC_REDEEM_TICKET` (aceptada por schema, pero bloqueada por diseno)
+- `SYNC_MINT`
+- `SYNC_SET_CLAIM_REQUIREMENTS`
+- `SYNC_SET_INVESTOR_AUTH`
+- `SYNC_SET_INVESTOR_LOCKUP`
+- `SYNC_CREATE_ROUND`
+- `SYNC_SET_ROUND_ALLOWLIST`
+- `SYNC_OPEN_ROUND`
+- `SYNC_CLOSE_ROUND`
+- `SYNC_MARK_PURCHASE_SETTLED`
+- `SYNC_REFUND_PURCHASE`
+- `SYNC_SET_TOKEN_COMPLIANCE`
 
-## 6.2 `ACTION_TYPE`
-Mapeo numerico usado para codificacion de reportes:
+Mapeo numerico actual:
 
 - `SYNC_KYC`: `0`
 - `SYNC_EMPLOYMENT_STATUS`: `1`
 - `SYNC_GOAL`: `2`
 - `SYNC_FREEZE_WALLET`: `3`
-- `SYNC_CREATE_GRANT`: `4`
+- `SYNC_PRIVATE_DEPOSIT`: `4`
 - `SYNC_BATCH`: `5`
+- `SYNC_REDEEM_TICKET`: `6`
+- `SYNC_MINT`: `7`
+- `SYNC_SET_CLAIM_REQUIREMENTS`: `8`
+- `SYNC_SET_INVESTOR_AUTH`: `9`
+- `SYNC_SET_INVESTOR_LOCKUP`: `10`
+- `SYNC_CREATE_ROUND`: `11`
+- `SYNC_SET_ROUND_ALLOWLIST`: `12`
+- `SYNC_OPEN_ROUND`: `13`
+- `SYNC_CLOSE_ROUND`: `14`
+- `SYNC_MARK_PURCHASE_SETTLED`: `15`
+- `SYNC_REFUND_PURCHASE`: `16`
+- `SYNC_SET_TOKEN_COMPLIANCE`: `17`
 
-## 7) Pipeline HTTP -> writeReport
+## 6.2 Acciones ACE (`ACE_*`)
+
+Estas acciones no escriben reportes onchain; llaman la API ACE:
+
+- `ACE_GENERATE_SHIELDED_ADDRESS`
+- `ACE_PRIVATE_TRANSFER`
+- `ACE_WITHDRAW_TICKET`
+
+La base por defecto es:
+
+- `https://convergence2026-token-api.cldev.cloud`
+
+## 7) Pipeline HTTP -> onchain / ACE
 
 ## 7.1 `onHTTPTrigger`
 
-1. Valida que payload no este vacio.
-2. Parse JSON.
-3. Valida contra `syncInputSchema`.
-4. Llama `buildInstruction`.
-5. Llama `submitInstruction`.
+1. valida que el payload exista
+2. parsea JSON
+3. valida contra `syncInputSchema`
+4. si la accion es `ACE_*`, ejecuta `executeAceAction`
+5. si la accion es `SYNC_REDEEM_TICKET`, revierte de forma explicita
+6. en el resto, construye la instruccion y la envia con `writeReport`
 
-## 7.2 `buildInstruction` por accion
-Cada accion construye `payload` ABI con `encodeAbiParameters` + `parseAbiParameters`.
+## 7.2 ABI payloads por accion
 
-### `SYNC_KYC`
-Tuple:
+Principales payloads actuales:
 
-- `(address employee, bool verified, address identity, uint16 country)`
+- `SYNC_KYC`
+  - `(address employee, bool verified, address identity, uint16 country)`
+- `SYNC_EMPLOYMENT_STATUS`
+  - `(address employee, bool employed)`
+- `SYNC_GOAL`
+  - `(bytes32 goalId, bool achieved, address employeeHint)`
+- `SYNC_FREEZE_WALLET`
+  - `(address walletAddress, bool frozen)`
+- `SYNC_PRIVATE_DEPOSIT`
+  - `(uint256 amount)`
+- `SYNC_MINT`
+  - `(address to, uint256 amount)`
+- `SYNC_SET_CLAIM_REQUIREMENTS`
+  - `(address employee, uint64 cliffEndTimestamp, bytes32 goalId, bool goalRequired)`
+- `SYNC_SET_INVESTOR_AUTH`
+  - `(address investor, bool authorized)`
+- `SYNC_SET_INVESTOR_LOCKUP`
+  - `(address investor, uint64 lockupUntil)`
+- `SYNC_CREATE_ROUND`
+  - `(uint256 roundId, uint64 startTime, uint64 endTime, uint256 tokenPriceUsdc6, uint256 maxUsdc)`
+- `SYNC_SET_ROUND_ALLOWLIST`
+  - `(uint256 roundId, address investor, uint256 capUsdc)`
+- `SYNC_OPEN_ROUND`
+  - `(uint256 roundId)`
+- `SYNC_CLOSE_ROUND`
+  - `(uint256 roundId)`
+- `SYNC_MARK_PURCHASE_SETTLED`
+  - `(uint256 purchaseId, bytes32 aceTransferRef)`
+- `SYNC_REFUND_PURCHASE`
+  - `(uint256 purchaseId, bytes32 reason)`
+- `SYNC_SET_TOKEN_COMPLIANCE`
+  - `(address complianceAddress)`
 
-Regla adicional:
+## 7.3 `SYNC_BATCH`
 
-- si `verified=true`, exige `identityAddress`.
+`SYNC_BATCH` codifica:
 
-### `SYNC_EMPLOYMENT_STATUS`
-Tuple:
+- `payload = abi.encode(bytes[] batches)`
 
-- `(address employee, bool employed)`
+Cada item de `batches` es un sub-reporte completo, no un payload crudo:
 
-### `SYNC_GOAL`
-Tuple:
+- `abi.encode(uint8 actionType, bytes payload)`
 
-- `(bytes32 goalId, bool achieved)`
+Esto ya esta alineado con `EquityWorkflowReceiver.sol`.
 
-### `SYNC_FREEZE_WALLET`
-Tuple:
+## 7.4 `submitInstruction`
 
-- `(address wallet, bool frozen)`
-
-### `SYNC_CREATE_GRANT`
-Tuple:
-
-- `(address employee, uint256 amount, uint256 startTime, uint256 cliffDuration, uint256 vestingDuration, bool isRevocable, bytes32 performanceGoalId)`
-
-### `SYNC_BATCH`
-Tuple actual en workflow:
-
-- `(bytes[] batches)`
-
-Cada elemento se llena actualmente con `buildInstruction(batch).payload`.
-
-## 7.3 `submitInstruction`
-
-1. Construye `reportData = abi.encode(uint8 actionType, bytes payload)`.
-2. Crea reporte CRE:
+1. crea `reportData = abi.encode(uint8 actionType, bytes payload)`
+2. genera el reporte CRE con:
    - `encoderName: evm`
    - `signingAlgo: ecdsa`
    - `hashingAlgo: keccak256`
-3. Ejecuta `evmClient.writeReport`:
-   - `receiver = receiverAddress`
-   - `gasLimit = evmConfig.gasLimit`
-4. Si `txStatus != SUCCESS`, lanza error.
-5. Retorna `txHash`.
+3. llama `evmClient.writeReport`
+4. valida `TxStatus.SUCCESS`
+5. retorna `txHash`
 
-## 8) Pipeline log EVM -> Lambda
+## 8) Integracion confidencial con ACE
 
-## 8.1 Decodificacion de evento
-`buildLambdaPayloadFromLog`:
+La integracion ACE usa `ConfidentialHTTPClient` por defecto cuando:
 
-- toma `topics` y `data`
-- intenta decodificar con `decodeEventLog` sobre `eventAbi`
-- si no coincide con ABI soportado, ignora log
+- `privacy.enableConfidentialAce=true`
 
-Eventos soportados:
+Se firma EIP-712 para:
+
+- generar shielded address
+- private transfer
+- withdraw ticket
+
+Controles actuales:
+
+- `assertExternalPayloadPolicy` bloquea secretos en HTTP plano
+- `redactLogs` evita exponer identificadores o credenciales en logs
+- `vaultDonSecrets[]` permite inyectar secretos desde Vault DON
+- `encryptOutputAce=true` habilita cifrado de respuesta en Confidential HTTP
+
+## 9) Pipeline log EVM -> Lambda
+
+`buildLambdaPayloadFromLog` decodifica y reenvia estos eventos:
 
 - `IdentityRegistered`
 - `IdentityRemoved`
 - `CountryUpdated`
-- `GrantCreated`
-- `TokensClaimed`
 - `EmploymentStatusUpdated`
 - `GoalUpdated`
-- `GrantRevoked`
+- `PrivateDeposit`
+- `TicketRedeemed`
+- `InvestorAuthorizationUpdated`
+- `InvestorLockupUpdated`
+- `RoundCreated`
+- `RoundOpened`
+- `RoundClosed`
+- `PurchaseRequested`
+- `PurchaseSettled`
+- `PurchaseRefunded`
 
-## 8.2 Envio HTTP a Lambda
 `onLogTrigger`:
 
-1. Construye payload de negocio.
-2. Resuelve URL:
-   - intenta `runtime.getSecret("LAMBDA_URL")`
-   - fallback a `runtime.config.url`
-3. Usa `HTTPClient.sendRequest` con `consensusIdenticalAggregation`.
-4. Retorna accion procesada.
+1. decodifica el log
+2. construye payload de negocio
+3. resuelve `LAMBDA_URL` desde secret o `config.url`
+4. envia HTTP estandar a Lambda
 
-## 9) Integracion con contratos y ABI esperada
+## 10) Limites actuales del workflow
 
-El receiver on-chain (`EquityWorkflowReceiver`) espera reportes en formato:
-
-- `abi.encode(uint8 actionType, bytes payload)`
-
-Para `SYNC_BATCH`, el receiver espera:
-
-- `payload = abi.encode(bytes[] batches)`
-- donde cada item de `batches` es otro `report` valido con `(uint8, bytes)`
-
-## 10) Limites y desviaciones detectadas
-
-## 10.1 `SYNC_BATCH` con posible mismatch de encoding
-Estado actual en workflow:
-
-- genera `bytes[]` con payloads internos (sin actionType por sub-item).
-
-Estado esperado por receiver:
-
-- cada sub-item debe ser reporte completo con `actionType + payload`.
-
-Impacto:
-
-- riesgo de revert/decoding error al procesar batch.
-
-## 10.2 `SYNC_FREEZE_WALLET` sin log-trigger de retorno
-Estado actual:
-
-- workflow no escucha logs de `Token`.
-
-Impacto:
-
-- no hay paso automatico de confirmacion on-chain via evento `AddressFrozen`.
+- `SYNC_REDEEM_TICKET` esta deshabilitado intencionalmente
+  - el ticket se solicita via `ACE_WITHDRAW_TICKET`
+  - el redeem final lo firma la wallet del usuario en el CCC Vault
+- no hay log trigger del token
+  - eventos como `AddressFrozen` no regresan automaticamente a Lambda
+- la simulacion local y el modo test pueden usar bypass del forwarder
+  - util para demos
+  - no equivale a hardening productivo
 
 ## 11) Comandos operativos utiles
 
 ## 11.1 Simulacion local
 
 ```bash
-cre workflow simulate ./EquityWorkflowCre --target local-simulation
+cre workflow simulate ./EquityWorkflowCre --target local-simulation --non-interactive --trigger-index 0
 ```
 
 ## 11.2 Trigger HTTP no interactivo
@@ -246,7 +311,8 @@ cre workflow simulate ./EquityWorkflowCre \
 ```
 
 ## 11.3 Replay de log trigger
-Para `IdentityRegistry` (trigger 1):
+
+Para el primer log trigger configurado:
 
 ```bash
 cre workflow simulate ./EquityWorkflowCre \
@@ -258,30 +324,14 @@ cre workflow simulate ./EquityWorkflowCre \
   --broadcast
 ```
 
-Para `EmployeeVesting` cambia a `--trigger-index 2`.
+Si `complianceV2Address` y `privateRoundsMarketAddress` estan configurados, sus triggers quedan despues en el orden descrito en la seccion 5.
 
-## 12) Pruebas del workflow
+## 12) Pruebas relevantes
 
-## 12.1 E2E principal (Lambda + ACE ticket)
 - `EquityWorkflowCre/tests/run-lambda-cre-ace-ticket-flow.mjs`
-
-Valida:
-
-1. Persistencia en Lambda
-2. Sync on-chain por CRE/Receiver (KYC, freeze, compliance baseline)
-3. Flujo ACE (private transfer + withdraw ticket)
-4. Redeem on-chain con `withdrawWithTicket`
-
-## 12.2 E2E private rounds market
+  - valida Lambda -> CRE -> onchain -> ACE/CCC -> redeem final
 - `EquityWorkflowCre/tests/run-private-rounds-market-flow.mjs`
-
-Valida:
-
-1. KYC + autorizacion de inversor + compliance
-2. Creacion/apertura de ronda y allowlist
-3. Rechazos esperados (unauthorized buy, cap excedido)
-4. Flujo de settlement + refund
-5. Restricciones globales de reventa (lockup + destinatario no autorizado)
+  - valida KYC, autorizacion de inversor, rondas privadas, settlement, refund y restricciones de reventa
 
 Comandos:
 
@@ -290,23 +340,11 @@ npm --prefix EquityWorkflowCre run test:lambda-cre-ace-ticket
 npm --prefix EquityWorkflowCre run test:private-rounds-market
 ```
 
-## 13) Checklist de produccion
+## 13) Checklist operativo
 
-1. Revisar direcciones en `config.production.json`.
-2. Verificar `chainSelectorName` y RPC de `project.yaml`.
-3. Cargar `LAMBDA_URL` en secrets vault.
-4. Confirmar ownership/oracle permissions del receiver en contratos.
-5. Definir politicas de retry para nonce/network errors.
-6. Corregir/validar `SYNC_BATCH` antes de usar en cargas masivas.
-7. Definir estrategia para eventos de `Token` (agregar log trigger o compensacion).
-
-## 14) Backlog recomendado para el workflow
-
-1. Corregir serializacion de sub-reportes en `SYNC_BATCH`.
-2. Agregar log trigger para `tokenAddress` y mapear `AddressFrozen`.
-3. Agregar pruebas E2E dedicadas para:
-   - `SYNC_BATCH`
-   - `SYNC_CREATE_GRANT`
-   - freeze con confirmacion on-chain + sync off-chain
-4. Normalizar documentacion de trigger-index en README y tests.
-
+1. revisar direcciones en `config.staging.json` o `config.production.json`
+2. verificar `chainSelectorName` y RPC en `project.yaml`
+3. cargar `LAMBDA_URL` como secret en despliegues reales
+4. confirmar ownership y permisos del receiver
+5. validar configuracion de `privacy.*` si se usa Confidential HTTP
+6. recordar que el redeem final ocurre desde la wallet del usuario, no desde CRE

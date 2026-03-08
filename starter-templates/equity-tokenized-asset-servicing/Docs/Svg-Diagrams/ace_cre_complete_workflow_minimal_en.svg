@@ -85,7 +85,7 @@
   <text x="1150" y="674" font-size="12" fill="#4338ca" text-anchor="middle">`ACE_GENERATE_SHIELDED_ADDRESS` -> /shielded-address</text>
   <text x="1150" y="695" font-size="12" fill="#4338ca" text-anchor="middle">`ACE_PRIVATE_TRANSFER` -> /private-transfer</text>
   <text x="1150" y="716" font-size="12" fill="#4338ca" text-anchor="middle">`ACE_WITHDRAW_TICKET` -> /withdraw</text>
-  <text x="1150" y="737" font-size="12" fill="#4338ca" text-anchor="middle">policy checks in ACE vault</text>
+  <text x="1150" y="737" font-size="12" fill="#4338ca" text-anchor="middle">policy checks in CCC Vault</text>
 
   <rect x="500" y="810" width="600" height="80" rx="10" fill="#fefce8" stroke="#facc15" stroke-width="2"/>
   <text x="800" y="842" font-size="15" font-weight="700" fill="#854d0e" text-anchor="middle">Outcome</text>
@@ -99,3 +99,4 @@
   <path d="M430 770 L430 850 L500 850" stroke="#15803d" stroke-width="3" fill="none" marker-end="url(#aGreen)"/>
   <path d="M1150 770 L1150 850 L1100 850" stroke="#1d4ed8" stroke-width="3" fill="none" marker-end="url(#aBlue)"/>
 </svg>
+

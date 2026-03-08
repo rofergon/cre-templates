@@ -36,7 +36,7 @@ Active deployed set:
 External integration addresses:
 
 - CRE forwarder (Sepolia): `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`
-- ACE vault: `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
+- Chainlink Confidential Compute Vault (CCC Vault): `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
 
 ## 3) Contract inventory
 
@@ -47,7 +47,7 @@ External integration addresses:
 | `IdentityRegistry.sol` | KYC identity + country state for wallets. |
 | `Token.sol` | ERC-3643-like ERC-20 rail with compliance and freeze controls. |
 | `ComplianceV2.sol` | Transfer policy engine (verification, authorization, lockup, trusted counterparties). |
-| `PrivateEmployeeEquity.sol` | Oracle-driven employment/goal/claim requirement gating + ACE vault deposit rail. |
+| `PrivateEmployeeEquity.sol` | Oracle-driven employment/goal/claim requirement gating + CCC Vault deposit rail. |
 | `PrivateRoundsMarket.sol` | Issuer-custodied private rounds with USDC escrow and off-chain settlement confirmation. |
 | `EquityWorkflowReceiver.sol` | CRE report entrypoint and action dispatcher (`0..17`). |
 | `MockUSDC.sol` | 6-decimal test stablecoin for round purchases in non-production flows. |
@@ -82,7 +82,7 @@ PrivateRoundsMarket
   -> MockUSDC/USDC (escrow + treasury/refund transfers)
 
 PrivateEmployeeEquity
-  -> ACE Vault (deposit/withdraw rail)
+  -> Chainlink Confidential Compute Vault (CCC Vault) (deposit/withdraw rail)
   -> Token (approve/deposit token flow)
 ```
 
@@ -215,7 +215,7 @@ Oracle-managed private servicing module replacing vesting-heavy flow with:
 - employment status gating
 - goal status gating
 - per-employee claim requirements (cliff + optional goal)
-- ACE vault deposit rail (`depositToVault`)
+- CCC Vault deposit rail (`depositToVault`)
 
 ### 9.2 Access control
 
@@ -287,12 +287,13 @@ Additional bootstrap:
 
 - `ComplianceV2.bindToken(token)`
 - trusted counterparties include `PrivateEmployeeEquity`, `EquityWorkflowReceiver`, `PrivateRoundsMarket`
-- ACE vault receives baseline authorization
+- CCC Vault receives baseline authorization
 - deployer and private-equity module are registered in identity registry for mint/deposit bootstrap
 
 
 
 ## 13) Related documentation
 
-- System-wide guide: `Docs/Comprehensive-Documentation.md`
+- Docs index: `Docs/README.md`
 - CRE workflow guide: `Docs/Workflow-CRE-Chainlink.md`
+

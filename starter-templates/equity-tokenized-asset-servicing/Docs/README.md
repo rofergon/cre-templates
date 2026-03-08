@@ -2,14 +2,21 @@
 
 Project documentation index.
 
-## 21) Solidity protocol guide
+## Current docs
 
 - `Docs/Solidity-Protocol.md`
-
-Includes contracts, functions, events, permissions, dependencies, deployment notes, and on-chain risks.
-
-## 3) CRE workflow guide
-
+  - contracts, permissions, dependencies, deployment notes, and onchain risks
 - `Docs/Workflow-CRE-Chainlink.md`
+  - current CRE workflow, triggers, schemas, confidential HTTP, log forwarding, and simulation flow
+- `Docs/Main-E2E-Commands.md`
+  - main end-to-end commands and what each test validates
 
-Includes triggers, schemas, ABI encoding, `writeReport`, log forwarding, simulation, and operations checklist.
+## Diagrams
+
+- `Docs/Svg-Diagrams/`
+  - current architecture and flow diagrams used by the project
+
+## Legacy docs
+
+- `Docs/Legacy/README.md`
+  - moved documentation that no longer reflects the active implementation

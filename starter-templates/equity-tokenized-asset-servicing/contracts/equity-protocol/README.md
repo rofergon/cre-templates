@@ -20,7 +20,7 @@ Deployment snapshot source: `../deployments/equity-latest.sepolia.json`
 
 Related external addresses:
 - CRE forwarder (Sepolia): `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`
-- ACE vault (official demo): `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
+- Chainlink Confidential Compute Vault (CCC Vault): `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
 
 ## Contract Set
 
@@ -38,7 +38,7 @@ Related external addresses:
     - trusted counterparties,
     - mint receiver must be verified and authorized/trusted.
 - `PrivateEmployeeEquity.sol`
-  - Employment/goal/cliff eligibility and ACE vault deposit rail.
+  - Employment/goal/cliff eligibility and CCC Vault deposit rail.
 - `PrivateRoundsMarket.sol`
   - Issuer-custodied rounds with USDC escrow and purchase states (`PENDING`, `SETTLED`, `REFUNDED`).
 - `MockUSDC.sol`
@@ -89,7 +89,7 @@ After `deploy_equity_new.cjs`:
 Additional bootstrap setup in deploy script:
 - `ComplianceV2.bindToken(token)`
 - trusted counterparties include `PrivateEmployeeEquity`, `EquityWorkflowReceiver`, `PrivateRoundsMarket`
-- ACE vault address gets investor authorization baseline
+- CCC Vault address gets investor authorization baseline
 - deployer + private-equity addresses are registered in `IdentityRegistry` for bootstrap mint/deposit compatibility
 
 ## Build and Deploy Commands
@@ -120,7 +120,7 @@ Full deploy in local testing mode (receiver forwarder bypass):
 npm --prefix contracts run deploy:equity:new:test-mode
 ```
 
-ACE policy setup/verification for vault registration:
+ACE policy setup/verification for CCC Vault registration:
 
 ```bash
 npm --prefix contracts run ace:setup-policy
@@ -129,7 +129,7 @@ npm --prefix contracts run ace:setup-policy
 ## Important Operational Notes
 
 - `SYNC_REDEEM_TICKET` is intentionally disabled in receiver to prevent server-side redemption.
-  Final redeem is executed by end-user wallet via `vault.withdrawWithTicket(token, amount, ticket)`.
+  Final redeem is executed by end-user wallet via `vault.withdrawWithTicket(token, amount, ticket)` on the CCC Vault.
 - The current snapshot was deployed with `testModeForwarderBypass=true`.
   This is useful for local simulation and direct `onReport` tests, not production hardening.
 - Refund accounting in `PrivateRoundsMarket` releases both round sold capacity and investor purchased capacity.
@@ -138,3 +138,4 @@ npm --prefix contracts run ace:setup-policy
 
 - Solidity architecture diagram: `../../equity_solidity_architecture.svg`
 - System architecture diagram: `../../equity_cre_architecture.svg`
+

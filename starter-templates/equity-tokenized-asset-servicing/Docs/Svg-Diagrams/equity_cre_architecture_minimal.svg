@@ -93,7 +93,7 @@
   <text x="785" y="554" font-size="11" fill="#bbf7d0" text-anchor="middle">actualizados por receiver</text>
 
   <rect x="662" y="590" width="246" height="91" rx="10" fill="#1f2937" stroke="#9ca3af" stroke-width="1.8"/>
-  <text x="785" y="621" font-size="15" font-weight="700" fill="#f8fafc" text-anchor="middle">ACE Vault (Sepolia)</text>
+  <text x="785" y="621" font-size="15" font-weight="700" fill="#f8fafc" text-anchor="middle">CCC Vault (Sepolia)</text>
   <text x="785" y="641" font-size="11" fill="#d1d5db" text-anchor="middle">`deposit` y `withdrawWithTicket`</text>
   <text x="785" y="658" font-size="11" fill="#d1d5db" text-anchor="middle">con policy engine de ACE</text>
 
@@ -138,3 +138,4 @@
   <rect x="30" y="724" width="1220" height="24" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
   <text x="640" y="740" font-size="11" fill="#475569" text-anchor="middle">Red objetivo: Ethereum Sepolia (11155111) | Claim final siempre desde la wallet real del empleado</text>
 </svg>
+

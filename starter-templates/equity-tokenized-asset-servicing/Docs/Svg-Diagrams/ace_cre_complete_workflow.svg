@@ -93,7 +93,7 @@
   <rect x="1170" y="500" width="330" height="115" rx="10" fill="#ffffff" stroke="#60a5fa" stroke-width="2" filter="url(#shadow-sm)"/>
   <text x="1335" y="532" font-size="14" font-weight="700" fill="#1e40af" text-anchor="middle">D) Equity Contracts</text>
   <text x="1335" y="555" font-size="12" fill="#2563eb" text-anchor="middle">Compliance / IdentityRegistry</text>
-  <text x="1335" y="575" font-size="12" fill="#2563eb" text-anchor="middle">EmployeeVesting / token logic</text>
+  <text x="1335" y="575" font-size="12" fill="#2563eb" text-anchor="middle">PrivateEmployeeEquity / token logic</text>
 
   <rect x="100" y="700" width="690" height="175" rx="10" fill="#ffffff" stroke="#34d399" stroke-width="2" filter="url(#shadow-sm)"/>
   <text x="445" y="732" font-size="14" font-weight="700" fill="#065f46" text-anchor="middle">F) Employee Action (separate wallet)</text>
@@ -131,3 +131,4 @@
   <rect x="1140" y="1005" width="360" height="30" rx="15" fill="#dbeafe" stroke="#60a5fa" stroke-width="1"/>
   <text x="1320" y="1025" font-size="11" fill="#1e40af" text-anchor="middle">Network: Ethereum Sepolia (chainId 11155111)</text>
 </svg>
+

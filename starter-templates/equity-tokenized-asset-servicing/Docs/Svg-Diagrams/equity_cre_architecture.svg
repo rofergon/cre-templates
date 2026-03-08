@@ -36,7 +36,7 @@
   </defs>
 
   <text x="780" y="52" font-size="34" font-weight="700" fill="#0f172a" text-anchor="middle">Equity CRE Architecture (Updated)</text>
-  <text x="780" y="82" font-size="15" fill="#475569" text-anchor="middle">Current flow for Lambda -> CRE -> Receiver -> ACE Vault/Ticket, including goal and cliff gating</text>
+  <text x="780" y="82" font-size="15" fill="#475569" text-anchor="middle">Current flow for Lambda -> CRE -> Receiver -> CCC Vault/Ticket, including goal and cliff gating</text>
 
   <!-- Lanes -->
   <rect x="24" y="120" width="320" height="820" rx="16" fill="url(#laneWeb2)" stroke="#cbd5e1" stroke-width="2" filter="url(#shadow)"/>
@@ -134,11 +134,11 @@
   <text x="994" y="572" font-size="11" fill="#bae6fd" text-anchor="middle">employmentStatus + goalsAchieved</text>
   <text x="994" y="589" font-size="11" fill="#bae6fd" text-anchor="middle">setClaimRequirements(cliffEndTimestamp, goalId, goalRequired)</text>
   <text x="994" y="606" font-size="11" fill="#bae6fd" text-anchor="middle">isEmployeeEligible() gates claim window</text>
-  <text x="994" y="623" font-size="11" fill="#bae6fd" text-anchor="middle">depositToVault(amount) -> official ACE vault</text>
+  <text x="994" y="623" font-size="11" fill="#bae6fd" text-anchor="middle">depositToVault(amount) -> CCC Vault</text>
   <text x="994" y="640" font-size="11" fill="#bae6fd" text-anchor="middle">uses ACE policy checks via registered policy engine</text>
 
   <rect x="834" y="700" width="320" height="80" rx="8" fill="#1f2937" stroke="#9ca3af" stroke-width="1.5"/>
-  <text x="994" y="730" font-size="15" font-weight="700" fill="#f8fafc" text-anchor="middle">Official ACE Vault (Sepolia)</text>
+  <text x="994" y="730" font-size="15" font-weight="700" fill="#f8fafc" text-anchor="middle">CCC Vault (Sepolia)</text>
   <text x="994" y="751" font-size="11" fill="#d1d5db" text-anchor="middle">deposit / withdrawWithTicket / policy enforcement</text>
 
   <rect x="834" y="796" width="320" height="115" rx="8" fill="#052e16" stroke="#34d399" stroke-width="1.8"/>
@@ -210,3 +210,4 @@
   <line x1="742" y1="960" x2="782" y2="960" stroke="#ea580c" stroke-width="3" stroke-dasharray="5 5" marker-end="url(#arrOrange)"/>
   <text x="790" y="964" font-size="11" fill="#334155">Local direct receiver test path</text>
 </svg>
+
