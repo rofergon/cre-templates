@@ -20,13 +20,13 @@ Verification status: core protocol contracts in this snapshot are verified on Et
 
 | Component | Address |
 |---|---|
-| EquityWorkflowReceiver | [`0x6b9d988880AEEC58Ec06AE2011bAfd9A52Bd398b`](https://sepolia.etherscan.io/address/0x6b9d988880AEEC58Ec06AE2011bAfd9A52Bd398b#code) |
 | IdentityRegistry | [`0xFDC59B2169Cb5320c7811629f457be655b47Ae5f`](https://sepolia.etherscan.io/address/0xFDC59B2169Cb5320c7811629f457be655b47Ae5f#code) |
 | ComplianceV2 | [`0x85A175a7853d7baC6E442013B5A1E115d822F786`](https://sepolia.etherscan.io/address/0x85A175a7853d7baC6E442013B5A1E115d822F786#code) |
 | Token (ERC-3643 rail) | [`0x056068Ea217A09F70Cd415923B1D950cebfe5Cae`](https://sepolia.etherscan.io/address/0x056068Ea217A09F70Cd415923B1D950cebfe5Cae#code) |
 | PrivateEmployeeEquity | [`0xF1B6C20118D7817EDb0D7D9c3Ab9eD79a0826289`](https://sepolia.etherscan.io/address/0xF1B6C20118D7817EDb0D7D9c3Ab9eD79a0826289#code) |
 | PrivateRoundsMarket | [`0xaeaEcF197147B874E83AE7dEd6A95Ec1f1744213`](https://sepolia.etherscan.io/address/0xaeaEcF197147B874E83AE7dEd6A95Ec1f1744213#code) |
 | MockUSDC (6d) | [`0x962B088AFFDc582C4Dd50d2D11bCbE952992A432`](https://sepolia.etherscan.io/address/0x962B088AFFDc582C4Dd50d2D11bCbE952992A432#code) |
+| EquityWorkflowReceiver | [`0x6b9d988880AEEC58Ec06AE2011bAfd9A52Bd398b`](https://sepolia.etherscan.io/address/0x6b9d988880AEEC58Ec06AE2011bAfd9A52Bd398b#code) |
 
 ### Direct Links (latest E2E validation)
 

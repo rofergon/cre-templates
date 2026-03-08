@@ -13,7 +13,7 @@
  *   CRE_EMPLOYEE_ETH_PRIVATE_KEY
  *
  * Optional env:
- *   SEPOLIA_RPC_URL
+ *   SEPOLIA_RPC_URL                  (optional override; otherwise uses project.yaml local-simulation RPC)
  *   TOKEN_ADDRESS
  *   COMPLIANCE_V2_ADDRESS
  *   PRIVATE_ROUNDS_MARKET_ADDRESS
@@ -269,15 +269,14 @@ const run = async () => {
     String(
       process.env.USE_DIRECT_RECEIVER_REPORTS ??
         envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
-        "true",
+        "false",
     ).toLowerCase() === "true";
   const localSimulationRpcUrl = parseLocalSimulationRpcUrl(projectYamlPath);
-  const rpcUrl = useDirectReceiverReports
-    ? process.env.SEPOLIA_RPC_URL || envFromFile.SEPOLIA_RPC_URL || DEFAULT_RPC_URL
-    : localSimulationRpcUrl ||
-      process.env.SEPOLIA_RPC_URL ||
-      envFromFile.SEPOLIA_RPC_URL ||
-      DEFAULT_RPC_URL;
+  const rpcUrl =
+    process.env.SEPOLIA_RPC_URL ||
+    localSimulationRpcUrl ||
+    envFromFile.SEPOLIA_RPC_URL ||
+    DEFAULT_RPC_URL;
   const logCreOutput =
     String(process.env.LOG_CRE_OUTPUT ?? envFromFile.LOG_CRE_OUTPUT ?? "true").toLowerCase() === "true";
 

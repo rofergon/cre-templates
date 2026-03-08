@@ -11,10 +11,10 @@
  *   LAMBDA_URL (or config.staging.json url)
  *
  * Optional env:
- *   USE_DIRECT_RECEIVER_REPORTS=true   (default true; bypass CRE and call receiver directly)
+ *   USE_DIRECT_RECEIVER_REPORTS=true   (optional override; default false to use CRE simulate --broadcast)
  *   LOG_CRE_OUTPUT=true                (default true)
  *   LOG_ACE_OUTPUT=true                (default true)
- *   SEPOLIA_RPC_URL
+ *   SEPOLIA_RPC_URL                  (optional override; otherwise uses project.yaml local-simulation RPC)
  *   CRE_EMPLOYEE_IDENTITY_ADDRESS
  *   CRE_ADMIN_IDENTITY_ADDRESS
  *   CRE_EMPLOYEE_COUNTRY
@@ -444,15 +444,14 @@ const run = async () => {
     String(
       process.env.USE_DIRECT_RECEIVER_REPORTS ??
       envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
-      "true",
+      "false",
     ).toLowerCase() === "true";
   const localSimulationRpcUrl = parseLocalSimulationRpcUrl(projectYamlPath);
-  const rpcUrl = useDirectReceiverReports
-    ? process.env.SEPOLIA_RPC_URL || envFromFile.SEPOLIA_RPC_URL || DEFAULT_RPC_URL
-    : localSimulationRpcUrl ||
-      process.env.SEPOLIA_RPC_URL ||
-      envFromFile.SEPOLIA_RPC_URL ||
-      DEFAULT_RPC_URL;
+  const rpcUrl =
+    process.env.SEPOLIA_RPC_URL ||
+    localSimulationRpcUrl ||
+    envFromFile.SEPOLIA_RPC_URL ||
+    DEFAULT_RPC_URL;
   const logCreOutput =
     String(process.env.LOG_CRE_OUTPUT ?? envFromFile.LOG_CRE_OUTPUT ?? "true").toLowerCase() === "true";
   const logAceOutput =
