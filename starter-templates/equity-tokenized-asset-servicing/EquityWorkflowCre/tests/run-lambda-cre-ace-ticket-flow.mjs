@@ -11,7 +11,7 @@
  *   LAMBDA_URL (or config.staging.json url)
  *
  * Optional env:
- *   USE_DIRECT_RECEIVER_REPORTS=true   (default false; bypass CRE and call receiver directly)
+ *   USE_DIRECT_RECEIVER_REPORTS=true   (default true; bypass CRE and call receiver directly)
  *   LOG_CRE_OUTPUT=true                (default true)
  *   LOG_ACE_OUTPUT=true                (default true)
  *   SEPOLIA_RPC_URL
@@ -46,6 +46,7 @@ const projectRoot = resolve(workflowDir, "..");
 
 const configPath = resolve(workflowDir, "config.staging.json");
 const envPath = resolve(projectRoot, ".env");
+const projectYamlPath = resolve(projectRoot, "project.yaml");
 
 const config = JSON.parse(readFileSync(configPath, "utf-8"));
 
@@ -244,6 +245,15 @@ const parseEnvFile = (path) => {
   return out;
 };
 
+const parseLocalSimulationRpcUrl = (path) => {
+  if (!existsSync(path)) return null;
+  const text = readFileSync(path, "utf-8");
+  const match = text.match(
+    /local-simulation:\s*[\r\n]+(?:[ \t]+.*[\r\n]+)*?[ \t]+url:\s*([^\s#]+)/m,
+  );
+  return match?.[1] || null;
+};
+
 const normalizePrivateKey = (value, label) => {
   if (!value) throw new Error(`Missing ${label}`);
   const trimmed = String(value).trim();
@@ -358,7 +368,6 @@ const run = async () => {
   const lambdaUrl = process.env.LAMBDA_URL || envFromFile.LAMBDA_URL || config.url;
   if (!lambdaUrl) throw new Error("Missing LAMBDA_URL (.env or config)");
 
-  const rpcUrl = process.env.SEPOLIA_RPC_URL || envFromFile.SEPOLIA_RPC_URL || DEFAULT_RPC_URL;
   const tokenAddress = process.env.TOKEN_ADDRESS || envFromFile.TOKEN_ADDRESS || evmConfig.tokenAddress;
   const vaultAddress =
     process.env.ACE_VAULT_ADDRESS ||
@@ -435,8 +444,15 @@ const run = async () => {
     String(
       process.env.USE_DIRECT_RECEIVER_REPORTS ??
       envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
-      "false",
+      "true",
     ).toLowerCase() === "true";
+  const localSimulationRpcUrl = parseLocalSimulationRpcUrl(projectYamlPath);
+  const rpcUrl = useDirectReceiverReports
+    ? process.env.SEPOLIA_RPC_URL || envFromFile.SEPOLIA_RPC_URL || DEFAULT_RPC_URL
+    : localSimulationRpcUrl ||
+      process.env.SEPOLIA_RPC_URL ||
+      envFromFile.SEPOLIA_RPC_URL ||
+      DEFAULT_RPC_URL;
   const logCreOutput =
     String(process.env.LOG_CRE_OUTPUT ?? envFromFile.LOG_CRE_OUTPUT ?? "true").toLowerCase() === "true";
   const logAceOutput =
@@ -752,6 +768,7 @@ const run = async () => {
   console.log(`Compliance:  ${complianceV2Address}`);
   console.log(`Receiver:    ${receiverAddress}`);
   console.log(`Report path: ${useDirectReceiverReports ? "direct onReport" : "CRE simulate"}`);
+  console.log(`RPC:         ${rpcUrl}`);
   console.log(`Amount:      ${amountWei.toString()} wei`);
 
   console.log("\n1) Persist employee state in Lambda...");

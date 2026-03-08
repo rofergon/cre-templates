@@ -32,6 +32,24 @@ Verification status: core protocol contracts in this snapshot are verified on Et
 | Treasury | [`0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38`](https://sepolia.etherscan.io/address/0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38) |
 | ACE Policy Engine | [`0xb6dfC3Fd78f883B9F99d446a679b43B180f91e90`](https://sepolia.etherscan.io/address/0xb6dfC3Fd78f883B9F99d446a679b43B180f91e90) |
 
+### Direct Links (latest E2E validation)
+
+Ticket flow:
+- SYNC_KYC: [`0x80ee2e64131c4a7d3a8f453b25f0808aeb450e031f6d333be2c8e2393455d56f`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x80ee2e64131c4a7d3a8f453b25f0808aeb450e031f6d333be2c8e2393455d56f)
+- SYNC_FREEZE_WALLET: [`0x81abc722dd6c2409a3201983bd9e9930c5e1cb4d12791dd00118d4b5b016f600`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x81abc722dd6c2409a3201983bd9e9930c5e1cb4d12791dd00118d4b5b016f600)
+- SYNC_SET_TOKEN_COMPLIANCE: [`0xe8c025024ed41c761f46212ab35a9984f26abe56f67f148b871b208169c5b4be`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0xe8c025024ed41c761f46212ab35a9984f26abe56f67f148b871b208169c5b4be)
+- SYNC_SET_CLAIM_REQUIREMENTS (future cliff): [`0x5eee2b62bd0f97c1ad2149a22cfc77926c64af66911a8e71533e11293953579e`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x5eee2b62bd0f97c1ad2149a22cfc77926c64af66911a8e71533e11293953579e)
+- SYNC_EMPLOYMENT_STATUS: [`0x8f329b156bfa8ce4e561f10dd5cd629ab6f6428c99883f66825672490eb35c03`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x8f329b156bfa8ce4e561f10dd5cd629ab6f6428c99883f66825672490eb35c03)
+- SYNC_GOAL (false): [`0xd18d6492d19c83613abc8a99a74cd3e01285cc1c8485dbced3f870b8c4f8a5b3`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0xd18d6492d19c83613abc8a99a74cd3e01285cc1c8485dbced3f870b8c4f8a5b3)
+- SYNC_GOAL (true): [`0xb0e8ee7659bd5661b02f0fcc97a403674a9fc00dbe4feda905b91ca9bac5f737`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0xb0e8ee7659bd5661b02f0fcc97a403674a9fc00dbe4feda905b91ca9bac5f737)
+- SYNC_SET_CLAIM_REQUIREMENTS (past cliff): [`0x07478748e59386f2070b71d80fab60986a845eb2740c0945b140a7bc3bfc5bc8`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x07478748e59386f2070b71d80fab60986a845eb2740c0945b140a7bc3bfc5bc8)
+- SYNC_MINT: [`0x8fd4a090f79de43946a53f6fcafe7805ba0b8c2bd59f597c38012c2c62bef60d`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x8fd4a090f79de43946a53f6fcafe7805ba0b8c2bd59f597c38012c2c62bef60d)
+- Token approve: [`0x4f3d4152140ae812232540fd970342d26964f964e5bf855e6ba193a7cafe1cf5`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x4f3d4152140ae812232540fd970342d26964f964e5bf855e6ba193a7cafe1cf5)
+- Vault deposit: [`0x76e89f2fb1861c7d36075565d161c7cc6a0c4ed0c40961ab5eb40fecdb975363`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x76e89f2fb1861c7d36075565d161c7cc6a0c4ed0c40961ab5eb40fecdb975363)
+
+Private rounds market flow:
+- buyRound: [`0x94a85e93bea00f3350aeb782653594f12984bfbb9a2109998d4c786347644518`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x94a85e93bea00f3350aeb782653594f12984bfbb9a2109998d4c786347644518)
+
 ## GitHub Directory
 
 Main modules:

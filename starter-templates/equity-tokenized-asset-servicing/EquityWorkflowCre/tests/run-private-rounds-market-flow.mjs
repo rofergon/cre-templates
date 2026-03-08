@@ -40,6 +40,7 @@ const workflowDir = resolve(__dirname, "..");
 const projectRoot = resolve(workflowDir, "..");
 const configPath = resolve(workflowDir, "config.staging.json");
 const envPath = resolve(projectRoot, ".env");
+const projectYamlPath = resolve(projectRoot, "project.yaml");
 
 const DEFAULT_RPC_URL = "https://sepolia.gateway.tenderly.co/3Gg3yWf8Ftc5qKVcpRZYuI";
 const DEFAULT_COUNTRY = 840;
@@ -174,6 +175,15 @@ const parseEnvFile = (path) => {
   return out;
 };
 
+const parseLocalSimulationRpcUrl = (path) => {
+  if (!existsSync(path)) return null;
+  const text = readFileSync(path, "utf-8");
+  const match = text.match(
+    /local-simulation:\s*[\r\n]+(?:[ \t]+.*[\r\n]+)*?[ \t]+url:\s*([^\s#]+)/m,
+  );
+  return match?.[1] || null;
+};
+
 const wait = (ms) => new Promise((resolveWait) => setTimeout(resolveWait, ms));
 
 const isTransientTxError = (text) => {
@@ -234,7 +244,6 @@ const run = async () => {
   const buyer = privateKeyToAccount(buyerPk);
   const unauthorizedRecipient = "0x00000000000000000000000000000000000000b2";
 
-  const rpcUrl = process.env.SEPOLIA_RPC_URL || envFromFile.SEPOLIA_RPC_URL || DEFAULT_RPC_URL;
   const receiverAddress = evmConfig.receiverAddress;
   const tokenAddress = process.env.TOKEN_ADDRESS || envFromFile.TOKEN_ADDRESS || evmConfig.tokenAddress;
   const complianceAddress =
@@ -262,6 +271,13 @@ const run = async () => {
         envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
         "true",
     ).toLowerCase() === "true";
+  const localSimulationRpcUrl = parseLocalSimulationRpcUrl(projectYamlPath);
+  const rpcUrl = useDirectReceiverReports
+    ? process.env.SEPOLIA_RPC_URL || envFromFile.SEPOLIA_RPC_URL || DEFAULT_RPC_URL
+    : localSimulationRpcUrl ||
+      process.env.SEPOLIA_RPC_URL ||
+      envFromFile.SEPOLIA_RPC_URL ||
+      DEFAULT_RPC_URL;
   const logCreOutput =
     String(process.env.LOG_CRE_OUTPUT ?? envFromFile.LOG_CRE_OUTPUT ?? "true").toLowerCase() === "true";
 
@@ -459,6 +475,7 @@ const run = async () => {
   console.log(`USDC:        ${usdcAddress}`);
   console.log(`Treasury:    ${treasuryAddress}`);
   console.log(`Report path: ${useDirectReceiverReports ? "direct onReport" : "CRE simulate"}`);
+  console.log(`RPC:         ${rpcUrl}`);
 
   console.log("\n1) Ensure compliance + KYC baseline...");
   await sendOnchainAction({
