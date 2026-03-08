@@ -13,6 +13,7 @@ const TARGET_ALREADY_ATTACHED_SELECTOR = "0xd209f8fe";
 const NO_POLICY_ENGINE_REGISTERED_SELECTOR = "0x1cd30375";
 const EIP1967_IMPLEMENTATION_SLOT =
     "0x360894A13BA1A3210667C828492DB98DCA3E2076CC3735A920A3CA505D382BBC";
+const POLICY_ENGINE_FACTORY_NAME = "ChainlinkPolicyEngine";
 
 const VAULT_ABI = [
     "function register(address token, address policyEngine) external",
@@ -122,9 +123,24 @@ async function resolvePolicyEngineImplementation(candidateAddress) {
     return resolved === ZERO_ADDRESS ? candidate : resolved;
 }
 
-async function deployFreshPolicyEngineProxy(signer, seedAddress) {
+async function hasBytecode(address) {
+    const code = await ethers.provider.getCode(address);
+    return !!code && code !== "0x";
+}
+
+async function deployPolicyEngineImplementation(signer) {
+    const factory = await ethers.getContractFactory(POLICY_ENGINE_FACTORY_NAME, signer);
+    const implementation = await factory.deploy();
+    console.log("   implementation deploy tx:", implementation.deploymentTransaction().hash);
+    await implementation.waitForDeployment();
+    return implementation.getAddress();
+}
+
+async function deployFreshPolicyEngineProxy(signer, seedAddress = null) {
     const signerAddress = await signer.getAddress();
-    const implementation = await resolvePolicyEngineImplementation(seedAddress);
+    const implementation = seedAddress
+        ? await resolvePolicyEngineImplementation(seedAddress)
+        : await deployPolicyEngineImplementation(signer);
     const initData = POLICY_ENGINE_INIT_IFACE.encodeFunctionData("initialize", [true, signerAddress]);
 
     const proxyFactory = new ethers.ContractFactory(
@@ -221,16 +237,50 @@ async function main() {
     let desiredPolicyEngine = desiredPolicyEngineRaw
         ? normalizeAddress(desiredPolicyEngineRaw, "ACE_POLICY_ENGINE_ADDRESS")
         : currentPolicyEngine;
+    let desiredPolicyEngineHasCode = desiredPolicyEngineRaw
+        ? await hasBytecode(desiredPolicyEngine)
+        : currentPolicyEngine !== ZERO_ADDRESS;
+    const forceProxyForNonProxySeed = parseBoolEnv(process.env.ACE_POLICY_ENGINE_FORCE_PROXY, true);
     let autoDeployedProxyAddress = null;
+    let autoDeployedImplementationAddress = null;
 
     console.log("Current PolicyEngine:   ", currentPolicyEngine);
     console.log("Current Registrar:      ", currentRegistrar);
     console.log("Desired PolicyEngine:   ", desiredPolicyEngine);
     console.log("Auto deploy proxy:      ", autoDeployPolicyProxy ? "true" : "false");
 
-    if (!desiredPolicyEngineRaw && currentPolicyEngine === ZERO_ADDRESS) {
+    if (currentPolicyEngine === ZERO_ADDRESS && autoDeployPolicyProxy) {
+        let shouldDeployFreshProxy = false;
+        let proxySeedAddress = null;
+
+        if (!desiredPolicyEngineRaw) {
+            shouldDeployFreshProxy = true;
+        } else if (!desiredPolicyEngineHasCode) {
+            console.log("Desired PolicyEngine has no bytecode. Deploying a fresh official PolicyEngine proxy...");
+            shouldDeployFreshProxy = true;
+        } else {
+            const resolvedImplementation = await resolvePolicyEngineImplementation(desiredPolicyEngine);
+            const desiredLooksLikeProxy =
+                resolvedImplementation.toLowerCase() !== desiredPolicyEngine.toLowerCase();
+            if (forceProxyForNonProxySeed && !desiredLooksLikeProxy) {
+                console.log("Desired PolicyEngine looks like an implementation. Deploying a fresh proxy around it...");
+                shouldDeployFreshProxy = true;
+                proxySeedAddress = desiredPolicyEngine;
+            }
+        }
+
+        if (shouldDeployFreshProxy) {
+            const deployed = await deployFreshPolicyEngineProxy(signer, proxySeedAddress);
+            autoDeployedProxyAddress = deployed.proxyAddress;
+            autoDeployedImplementationAddress = deployed.implementation;
+            desiredPolicyEngine = deployed.proxyAddress;
+            desiredPolicyEngineHasCode = true;
+        }
+    }
+
+    if (currentPolicyEngine === ZERO_ADDRESS && !desiredPolicyEngineHasCode) {
         throw new Error(
-            "Token is not registered and ACE_POLICY_ENGINE_ADDRESS is missing. Set it to register.",
+            "Token is not registered and no usable PolicyEngine address is available.",
         );
     }
 
@@ -268,6 +318,7 @@ async function main() {
                 desiredPolicyEngineRaw,
             );
             autoDeployedProxyAddress = proxyAddress;
+            autoDeployedImplementationAddress = implementation;
             desiredPolicyEngine = proxyAddress;
 
             console.log("   new PolicyEngine proxy:", proxyAddress);
@@ -291,6 +342,9 @@ async function main() {
 
     console.log("\nFinal PolicyEngine:     ", finalPolicyEngine);
     console.log("Final Registrar:        ", finalRegistrar);
+    if (autoDeployedImplementationAddress) {
+        console.log("Fresh Implementation:   ", autoDeployedImplementationAddress);
+    }
     if (autoDeployedProxyAddress && autoUpdateDotEnv) {
         const envUpdated = updateEnvFile(ROOT_ENV_PATH, {
             ACE_POLICY_ENGINE_ADDRESS: finalPolicyEngine,

@@ -16,7 +16,35 @@ const normalizePrivateKey = (value) => {
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.20",
+  solidity: {
+    compilers: [
+      {
+        version: "0.8.20",
+      },
+    ],
+    overrides: {
+      "equity-protocol/ace-policy/core/PolicyEngine.sol": {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          viaIR: true,
+        },
+      },
+      "equity-protocol/ChainlinkPolicyEngine.sol": {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          viaIR: true,
+        },
+      },
+    },
+  },
   networks: {
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || DEFAULT_SEPOLIA_RPC_URL,

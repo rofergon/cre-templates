@@ -269,7 +269,7 @@ const run = async () => {
     String(
       process.env.USE_DIRECT_RECEIVER_REPORTS ??
         envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
-        "false",
+        "true",
     ).toLowerCase() === "true";
   const localSimulationRpcUrl = parseLocalSimulationRpcUrl(projectYamlPath);
   const rpcUrl =

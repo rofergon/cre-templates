@@ -11,7 +11,7 @@
  *   LAMBDA_URL (or config.staging.json url)
  *
  * Optional env:
- *   USE_DIRECT_RECEIVER_REPORTS=true   (optional override; default false to use CRE simulate --broadcast)
+ *   USE_DIRECT_RECEIVER_REPORTS=true   (default true for test mode; bypass CRE and call receiver directly)
  *   LOG_CRE_OUTPUT=true                (default true)
  *   LOG_ACE_OUTPUT=true                (default true)
  *   SEPOLIA_RPC_URL                  (optional override; otherwise uses project.yaml local-simulation RPC)
@@ -444,7 +444,7 @@ const run = async () => {
     String(
       process.env.USE_DIRECT_RECEIVER_REPORTS ??
       envFromFile.USE_DIRECT_RECEIVER_REPORTS ??
-      "false",
+      "true",
     ).toLowerCase() === "true";
   const localSimulationRpcUrl = parseLocalSimulationRpcUrl(projectYamlPath);
   const rpcUrl =

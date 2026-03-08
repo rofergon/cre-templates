@@ -11,10 +11,12 @@ This repository is currently operated in local simulation mode for workflow exec
 ## Current Network and Deployment
 
 Network: Ethereum Sepolia (chainId 11155111)
+CRE execution mode: `local-simulation` target over `https://sepolia.gateway.tenderly.co/3Gg3yW..........`
 Deployment snapshot file: [`contracts/deployments/equity-latest.sepolia.json`](./contracts/deployments/equity-latest.sepolia.json)
 Deployed at: `2026-03-08T16:03:12.953Z`
 
 Verification status: core protocol contracts in this snapshot are verified on Etherscan.
+ACE vault registration is active for this token with PolicyEngine [`0x0Afb91E769Ae33517D3B07ac54E981266775D320`](https://sepolia.etherscan.io/address/0x0Afb91E769Ae33517D3B07ac54E981266775D320).
 
 ### Core Addresses (latest snapshot)
 
@@ -30,7 +32,23 @@ Verification status: core protocol contracts in this snapshot are verified on Et
 
 ### Direct Links (latest E2E validation)
 
+#### Sepolia Explorer
+
+ACE setup:
+- Vault register token + PolicyEngine: [`0x736178347234fb112fdf6300f7d4ab607baab9819d906df7688b60f987b19330`](https://sepolia.etherscan.io/tx/0x736178347234fb112fdf6300f7d4ab607baab9819d906df7688b60f987b19330)
+
+Ticket flow:
+- SYNC_KYC: [`0x68d06e55e6e19220f2826c538d237f60f09f2bef0dd081da3ca07ed26f953fd0`](https://sepolia.etherscan.io/tx/0x68d06e55e6e19220f2826c538d237f60f09f2bef0dd081da3ca07ed26f953fd0)
+- SYNC_SET_CLAIM_REQUIREMENTS (future cliff): [`0xd849987673f580b2f7528f3588eeaaa0f9256828de6d66a108f8508efcfe008a`](https://sepolia.etherscan.io/tx/0xd849987673f580b2f7528f3588eeaaa0f9256828de6d66a108f8508efcfe008a)
+- CCC Vault deposit: [`0x3bd7dc5e72cf42fa22717ebd1e785b6651d071ba0ce9c9fea77adf36e05f24b7`](https://sepolia.etherscan.io/tx/0x3bd7dc5e72cf42fa22717ebd1e785b6651d071ba0ce9c9fea77adf36e05f24b7)
+- Employee `withdrawWithTicket`: [`0xc34c46b0688dca6de1236cbd49a7142a06c3b39c643a2b5a6ad2203254acc14b`](https://sepolia.etherscan.io/tx/0xc34c46b0688dca6de1236cbd49a7142a06c3b39c643a2b5a6ad2203254acc14b)
+
+Private rounds market flow:
+- `buyRound`: [`0xcf7a103462657316b8de8756661caf1f3b68c020a237c3f928c35111e5a4ed8c`](https://sepolia.etherscan.io/tx/0xcf7a103462657316b8de8756661caf1f3b68c020a237c3f928c35111e5a4ed8c)
+
 #### Tenderly Virtual TestNet
+
+Historical local-simulation hashes:
 
 Ticket flow:
 - SYNC_KYC: [`0x80ee2e64131c4a7d3a8f453b25f0808aeb450e031f6d333be2c8e2393455d56f`](https://dashboard.tenderly.co/explorer/vnet/3bc9b117-a045-4704-b6fd-e5b17405022d/tx/0x80ee2e64131c4a7d3a8f453b25f0808aeb450e031f6d333be2c8e2393455d56f)
@@ -241,7 +259,7 @@ npm --prefix lambda-function test
 
 ## Local Simulation Notes
 
-- Current deployed snapshot was generated with `testModeForwarderBypass=true`.
+- Current receiver testing mode is direct `onReport` with forwarder bypass enabled onchain for local/manual E2E validation.
 - `SYNC_REDEEM_TICKET` is intentionally disabled in receiver. Ticket redeem must be executed by the employee wallet directly on the CCC Vault.
 - `EquityWorkflowCre/config.staging.json` and `config.production.json` are now git-ignored locally to avoid leaking Lambda URLs.
 - `secrets.yaml` is only required for deployed CRE targets. For local simulation, config + `.env` are sufficient.
