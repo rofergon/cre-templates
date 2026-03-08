@@ -20,7 +20,6 @@ Verification status: core protocol contracts in this snapshot are verified on Et
 
 | Component | Address |
 |---|---|
-| Chainlink Confidential Compute Vault (CCC Vault) | [`0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`](https://sepolia.etherscan.io/address/0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13) |
 | EquityWorkflowReceiver | [`0x6b9d988880AEEC58Ec06AE2011bAfd9A52Bd398b`](https://sepolia.etherscan.io/address/0x6b9d988880AEEC58Ec06AE2011bAfd9A52Bd398b#code) |
 | IdentityRegistry | [`0xFDC59B2169Cb5320c7811629f457be655b47Ae5f`](https://sepolia.etherscan.io/address/0xFDC59B2169Cb5320c7811629f457be655b47Ae5f#code) |
 | ComplianceV2 | [`0x85A175a7853d7baC6E442013B5A1E115d822F786`](https://sepolia.etherscan.io/address/0x85A175a7853d7baC6E442013B5A1E115d822F786#code) |
@@ -28,8 +27,6 @@ Verification status: core protocol contracts in this snapshot are verified on Et
 | PrivateEmployeeEquity | [`0xF1B6C20118D7817EDb0D7D9c3Ab9eD79a0826289`](https://sepolia.etherscan.io/address/0xF1B6C20118D7817EDb0D7D9c3Ab9eD79a0826289#code) |
 | PrivateRoundsMarket | [`0xaeaEcF197147B874E83AE7dEd6A95Ec1f1744213`](https://sepolia.etherscan.io/address/0xaeaEcF197147B874E83AE7dEd6A95Ec1f1744213#code) |
 | MockUSDC (6d) | [`0x962B088AFFDc582C4Dd50d2D11bCbE952992A432`](https://sepolia.etherscan.io/address/0x962B088AFFDc582C4Dd50d2D11bCbE952992A432#code) |
-| Treasury | [`0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38`](https://sepolia.etherscan.io/address/0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38) |
-| ACE Policy Engine | [`0xb6dfC3Fd78f883B9F99d446a679b43B180f91e90`](https://sepolia.etherscan.io/address/0xb6dfC3Fd78f883B9F99d446a679b43B180f91e90) |
 
 ### Direct Links (latest E2E validation)
 
@@ -43,8 +40,6 @@ Verified contracts:
 - PrivateEmployeeEquity: [`0xF1B6C20118D7817EDb0D7D9c3Ab9eD79a0826289`](https://sepolia.etherscan.io/address/0xF1B6C20118D7817EDb0D7D9c3Ab9eD79a0826289#code)
 - PrivateRoundsMarket: [`0xaeaEcF197147B874E83AE7dEd6A95Ec1f1744213`](https://sepolia.etherscan.io/address/0xaeaEcF197147B874E83AE7dEd6A95Ec1f1744213#code)
 - MockUSDC: [`0x962B088AFFDc582C4Dd50d2D11bCbE952992A432`](https://sepolia.etherscan.io/address/0x962B088AFFDc582C4Dd50d2D11bCbE952992A432#code)
-- ACE Vault: [`0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`](https://sepolia.etherscan.io/address/0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13)
-- Treasury: [`0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38`](https://sepolia.etherscan.io/address/0xaB6E247B25463F76E81aBAbBb6b0b86B40d45D38)
 
 #### Tenderly Virtual TestNet
 
