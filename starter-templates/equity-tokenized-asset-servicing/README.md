@@ -20,7 +20,6 @@ Verification status: core protocol contracts in this snapshot are verified on Et
 
 | Component | Address |
 |---|---|
-| CRE Forwarder (Sepolia) | [`0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`](https://sepolia.etherscan.io/address/0x82300bd7c3958625581cc2f77bc6464dcecdf3e5) |
 | Chainlink Confidential Compute Vault (CCC Vault) | [`0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`](https://sepolia.etherscan.io/address/0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13) |
 | EquityWorkflowReceiver | [`0x6b9d988880AEEC58Ec06AE2011bAfd9A52Bd398b`](https://sepolia.etherscan.io/address/0x6b9d988880AEEC58Ec06AE2011bAfd9A52Bd398b#code) |
 | IdentityRegistry | [`0xFDC59B2169Cb5320c7811629f457be655b47Ae5f`](https://sepolia.etherscan.io/address/0xFDC59B2169Cb5320c7811629f457be655b47Ae5f#code) |
